@@ -92,6 +92,9 @@ class QualityAgent:
         # 7. Legendas
         self._check_subtitles(srt_path)
 
+        # 8. Regra de Ouro: verifica que nenhuma mídia se repete entre cenas
+        self._check_duplicate_assets(asset_map)
+
         # Grava relatório
         report = self._build_report(video_path, expected_duration_s)
         report_path = self.saida / "quality_report.json"
@@ -232,6 +235,37 @@ class QualityAgent:
         else:
             self._add(self.INFO, "asset_coverage",
                       f"Todas as {len(scenes)} cenas possuem midia")
+
+    def _check_duplicate_assets(self, asset_map: Dict):
+        """
+        Regra de Ouro: verifica que nenhuma mídia (imagem ou vídeo)
+        se repete entre cenas no vídeo final.
+        Compara hashes MD5 do conteúdo binário de cada arquivo.
+        """
+        seen_hashes: Dict[str, int] = {}
+        duplicates: list = []
+        for sid, path in asset_map.items():
+            if not os.path.exists(path):
+                continue
+            h = hashlib.md5()
+            try:
+                with open(path, "rb") as f:
+                    while chunk := f.read(65536):
+                        h.update(chunk)
+                file_hash = h.hexdigest()
+            except Exception:
+                continue
+            if file_hash in seen_hashes:
+                duplicates.append((sid, seen_hashes[file_hash], os.path.basename(path)))
+            else:
+                seen_hashes[file_hash] = sid
+        if duplicates:
+            detail = "; ".join(f"Cena {a} = Cena {b} ({name})" for a, b, name in duplicates)
+            self._add(self.CRITICAL, "duplicate_assets",
+                      f"MIDIA DUPLICADA DETECTADA: {detail}")
+        else:
+            self._add(self.INFO, "duplicate_assets",
+                      f"Exclusividade OK: {len(seen_hashes)} assets todos unicos")
 
     def _check_subtitles(self, srt_path: str):
         if not Path(srt_path).exists():
