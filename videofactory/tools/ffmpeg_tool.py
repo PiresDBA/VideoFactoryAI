@@ -76,26 +76,16 @@ def render_ken_burns_clip(
     """Generate a cinematic Ken Burns zoompan clip from a static image."""
     frames = max(1, int(round(duration * fps)))
     
-    # Alternate zoom style based on scene index for visual rhythm
-    if scene_index % 3 == 0:
-        # Subtle Zoom-Out
-        z_expr = f"'max(1.20-{zoom_speed}*on,1.0)'"
-        x_expr = "'iw/2-(iw/zoom/2)'"
-        y_expr = "'ih/2-(ih/zoom/2)'"
-    elif scene_index % 2 == 0:
-        # Zoom-In with gentle pan to top-left
-        z_expr = f"'min(zoom+{zoom_speed},1.22)'"
-        x_expr = "'(iw-iw/zoom)/3'"
-        y_expr = "'(ih-ih/zoom)/3'"
-    else:
-        # Centered smooth Zoom-In
-        z_expr = f"'min(zoom+{zoom_speed},1.25)'"
-        x_expr = "'iw/2-(iw/zoom/2)'"
-        y_expr = "'ih/2-(ih/zoom/2)'"
+    # Cinematic Ken Burns with 4K pre-scaling and smooth sinusoidal ease
+    # Pre-scaling to 4K (3840x2160) eliminates 1-pixel quantization vibration.
+    # The sinusoidal zoom '1.02 + 0.10*sin(PI*on/frames)' smoothly pushes in and gently pulls out.
+    z_expr = f"'1.02+0.10*sin(PI*on/{frames})'"
+    x_expr = "'iw/2-(iw/zoom/2)'"
+    y_expr = "'ih/2-(ih/zoom/2)'"
 
     vf_filter = (
-        f"scale={width}:{height}:force_original_aspect_ratio=increase,"
-        f"crop={width}:{height},"
+        f"scale=3840:2160:force_original_aspect_ratio=increase,"
+        f"crop=3840:2160,"
         f"zoompan=z={z_expr}:d={frames}:x={x_expr}:y={y_expr}:s={width}x{height}:fps={fps},"
         f"format=yuv420p"
     )

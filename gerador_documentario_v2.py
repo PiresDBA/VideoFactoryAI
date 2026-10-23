@@ -306,12 +306,11 @@ def process_scenes_to_clips(asset_map: Dict[int, str]) -> List[str]:
         print(f"  [{idx:02d}/{total:02d}] Rendering Clip {s_id:02d} ({s_type.upper()}, {s_dur:.2f}s)...")
         
         if s_type == "image":
-            # Cinematic Ken Burns zoompan filter with high-res pre-scale
-            zoom_speed = 0.0008
+            # Cinematic Ken Burns suave com pre-scale 4K e movimento senoidal (zero jitter)
             vf = (
-                f"scale=1920:1080:force_original_aspect_ratio=increase,"
-                f"crop=1920:1080,"
-                f"zoompan=z='min(zoom+{zoom_speed},1.25)':d={frames}:"
+                f"scale=3840:2160:force_original_aspect_ratio=increase,"
+                f"crop=3840:2160,"
+                f"zoompan=z='1.02+0.10*sin(PI*on/{frames})':d={frames}:"
                 f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
                 f"s=1920x1080:fps=30,format=yuv420p"
             )

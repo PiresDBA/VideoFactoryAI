@@ -19,13 +19,17 @@ def process_single_scene(
     frames = max(1, int(round(duration * 30)))
     
     if is_image:
-        # Professional Ken Burns Zoompan
-        # Alternating motion: even scenes zoom-in, odd scenes zoom-in with subtle pan
-        zoom_speed = 0.0008
+        # Efeito Ken Burns Suave (Zero-Jitter Breathing Zoom)
+        # 1. Pré-escala para 4K UHD (3840x2160): elimina a quantização de pixels inteiros do FFmpeg zoompan.
+        #    No canvas de 1080p, arredondamentos de 1 pixel causam tremulação constante ("câmera sacudindo").
+        #    Em 4K, o erro de arredondamento fica no nível subpixel e desaparece ao reamostrar para 1080p.
+        # 2. Movimento Senoidal Suave: z='1.02 + 0.10*sin(PI*on/d)'
+        #    A aproximação e o recuo ("zoom e volta devagar") aceleram e desaceleram sem paradas bruscas,
+        #    proporcionando transição cinematográfica fluida e sem causar tontura.
         vf_filter = (
-            f"scale=1920:1080:force_original_aspect_ratio=increase,"
-            f"crop=1920:1080,"
-            f"zoompan=z='min(zoom+{zoom_speed},1.25)':d={frames}:"
+            f"scale=3840:2160:force_original_aspect_ratio=increase,"
+            f"crop=3840:2160,"
+            f"zoompan=z='1.02+0.10*sin(PI*on/{frames})':d={frames}:"
             f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
             f"s=1920x1080:fps=30,format=yuv420p"
         )
