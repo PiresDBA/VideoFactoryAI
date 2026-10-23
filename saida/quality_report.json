@@ -1,50 +1,53 @@
 {
-  "timestamp": "2026-10-22T23:54:30.179078",
+  "timestamp": "2026-10-23T00:27:00.607787",
   "video_path": "C:\\Projeto_Ira_EUA\\saida\\historia_final.mp4",
-  "expected_duration": 372.38,
-  "status": "REPROVADO",
-  "critical_count": 3,
-  "warning_count": 1,
+  "expected_duration": 118.32,
+  "status": "APROVADO",
+  "critical_count": 0,
+  "warning_count": 0,
   "checks": {
-    "critical": [
-      {
-        "level": "CRITICAL",
-        "check": "resolution",
-        "message": "Resolucao abaixo do minimo: 0x0 (minimo 1280x720)"
-      },
-      {
-        "level": "CRITICAL",
-        "check": "audio_stream",
-        "message": "Stream de audio ausente no video final"
-      },
-      {
-        "level": "CRITICAL",
-        "check": "duration",
-        "message": "Duracao do video e zero ou invalida"
-      }
-    ],
-    "warnings": [
-      {
-        "level": "WARNING",
-        "check": "black_frames",
-        "message": "1 segmento(s) preto(s) detectado(s), total=0.6s"
-      }
-    ],
+    "critical": [],
+    "warnings": [],
     "info": [
       {
         "level": "INFO",
         "check": "file_exists",
-        "message": "Video encontrado: historia_final.mp4 (22.5 MB)"
+        "message": "Video encontrado: historia_final.mp4 (123.7 MB)"
+      },
+      {
+        "level": "INFO",
+        "check": "resolution",
+        "message": "Resolucao OK: 1920x1080"
+      },
+      {
+        "level": "INFO",
+        "check": "audio_stream",
+        "message": "Stream de audio presente"
+      },
+      {
+        "level": "INFO",
+        "check": "duration",
+        "message": "Duracao OK: 118.3s (esperado ~118.3s)"
+      },
+      {
+        "level": "INFO",
+        "check": "black_frames",
+        "message": "Nenhum frame preto detectado"
+      },
+      {
+        "level": "INFO",
+        "check": "repeated_frames",
+        "message": "Frames variados: 8/8 frames unicos"
       },
       {
         "level": "INFO",
         "check": "asset_coverage",
-        "message": "Todas as 5 cenas possuem midia"
+        "message": "Todas as 6 cenas possuem midia"
       },
       {
         "level": "INFO",
         "check": "subtitles",
-        "message": "SRT OK: 69 blocos de legenda"
+        "message": "SRT OK: 26 blocos de legenda"
       }
     ]
   }
