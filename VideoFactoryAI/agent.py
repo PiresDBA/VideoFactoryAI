@@ -839,6 +839,18 @@ def main():
         state = load_checkpoint(checkpoint)
         if state:
             log("Retomando do checkpoint salvo...")
+    else:
+        # Nova produção: limpa artefatos temporários da execução anterior
+        # para garantir áudio, legendas e clipes sincronizados com este documentário!
+        for f in [Path(audio_path), Path(srt_path), Path(manifest_path)]:
+            if f.exists():
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+        if Path(temp_clips).exists():
+            shutil.rmtree(temp_clips, ignore_errors=True)
+        Path(temp_clips).mkdir(parents=True, exist_ok=True)
 
     t0 = time.time()
     print("\n" + "="*62)
