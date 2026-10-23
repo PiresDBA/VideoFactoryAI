@@ -1,0 +1,3 @@
+file 'C:/Projeto_Ira_EUA/videos/cena_01.mp4'
+file 'C:/Projeto_Ira_EUA/videos/cena_02.mp4'
+file 'C:/Projeto_Ira_EUA/videos/cena_03.mp4'

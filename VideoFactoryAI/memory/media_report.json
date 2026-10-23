@@ -1,0 +1,52 @@
+[
+  {
+    "scene_id": 1,
+    "level": 2,
+    "source": "pixabay_image",
+    "url": "https://pixabay.com/get/gf199b53fc6f9d336ea73e21e311b65ea2eca7908abb0aa80a32d8c44aaa698da05e2f29503b6852dfee546be8944604c27646367584b3d35cde2dab440d88230_1280.jpg",
+    "license": "pixabay license",
+    "media_type": "image",
+    "file_path": "C:\\Projeto_Ira_EUA\\imagens\\cena_01.jpg",
+    "compliant": true
+  },
+  {
+    "scene_id": 2,
+    "level": 2,
+    "source": "pixabay_image",
+    "url": "https://pixabay.com/get/gf199b53fc6f9d336ea73e21e311b65ea2eca7908abb0aa80a32d8c44aaa698da05e2f29503b6852dfee546be8944604c27646367584b3d35cde2dab440d88230_1280.jpg",
+    "license": "pixabay license",
+    "media_type": "image",
+    "file_path": "C:\\Projeto_Ira_EUA\\imagens\\cena_02.jpg",
+    "compliant": true
+  },
+  {
+    "scene_id": 3,
+    "level": 1,
+    "source": "pixabay_video",
+    "url": "https://cdn.pixabay.com/video/2023/10/08/184069-872413642_large.mp4",
+    "license": "pixabay license",
+    "media_type": "video",
+    "file_path": "C:\\Projeto_Ira_EUA\\videos\\cena_03.mp4",
+    "compliant": true
+  },
+  {
+    "scene_id": 4,
+    "level": 1,
+    "source": "pixabay_video",
+    "url": "https://cdn.pixabay.com/video/2016/02/29/2340-157269921_large.mp4",
+    "license": "pixabay license",
+    "media_type": "video",
+    "file_path": "C:\\Projeto_Ira_EUA\\videos\\cena_04.mp4",
+    "compliant": true
+  },
+  {
+    "scene_id": 5,
+    "level": 2,
+    "source": "pixabay_image",
+    "url": "https://pixabay.com/get/gf199b53fc6f9d336ea73e21e311b65ea2eca7908abb0aa80a32d8c44aaa698da05e2f29503b6852dfee546be8944604c27646367584b3d35cde2dab440d88230_1280.jpg",
+    "license": "pixabay license",
+    "media_type": "image",
+    "file_path": "C:\\Projeto_Ira_EUA\\imagens\\cena_05.jpg",
+    "compliant": true
+  }
+]

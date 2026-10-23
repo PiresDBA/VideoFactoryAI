@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large binary files (GitHub limit: 100MB)
+ffmpeg.exe
+ffprobe.exe
+*.zip
+*.tar.gz
+
+# Video outputs and temporary render files
+saida/*.mp4
+saida/*.mkv
+saida/*.avi
+temp_clips/
+videos/*.mp4
+videos/*.mov
+
+# Audio files
+*.wav
+*.mp3
+resultado_limpo.wav
+narracao.mp3
+
+# Cache and checkpoints
+cache/assets/
+ckpts/
+.cache/
+VideoFactoryAI/__pycache__/
+videofactory/__pycache__/
+
+# Agent and OS metadata
+.gemini/
+.claude/
+.agents/
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Environments
+venv/
+.venv/
+env/
