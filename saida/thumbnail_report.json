@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-10-22T23:54:25.103196",
+  "title": "A Guerra Fria",
+  "canal": "historia",
+  "best_version": "v3",
+  "best_path": "C:\\Projeto_Ira_EUA\\saida\\thumbnail.jpg",
+  "versions": [
+    {
+      "version": "v1",
+      "path": "C:\\Projeto_Ira_EUA\\saida\\thumbnail_v1.jpg",
+      "strategy": "frame_inicio",
+      "contrast_score": 14.128286486404363
+    },
+    {
+      "version": "v2",
+      "path": "C:\\Projeto_Ira_EUA\\saida\\thumbnail_v2.jpg",
+      "strategy": "frame_meio",
+      "contrast_score": 11.540969285804733
+    },
+    {
+      "version": "v3",
+      "path": "C:\\Projeto_Ira_EUA\\saida\\thumbnail_v3.jpg",
+      "strategy": "card_procedural",
+      "contrast_score": 14.301459523803087
+    }
+  ]
+}

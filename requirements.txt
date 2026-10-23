@@ -1,0 +1,20 @@
+# VideoFactoryAI — Requirements
+# Install with: pip install -r requirements.txt
+
+# ── Core Video Processing ─────────────────────────────────────────────────────
+Pillow>=10.0.0             # Thumbnail generation, image processing
+requests>=2.31.0           # API calls (Pixabay, Wikimedia, Pollinations)
+
+# ── Speech & Audio ────────────────────────────────────────────────────────────
+edge-tts>=6.1.0            # Free Microsoft Neural TTS (default narrator)
+openai-whisper>=20231117   # Speech-to-text for subtitle generation
+
+# ── Optional: Voice Cloning ───────────────────────────────────────────────────
+# f5-tts                   # F5-TTS for cloning your own voice (pip install f5-tts)
+
+# ── Optional: OpenAI (TTS + DALL-E 3) ────────────────────────────────────────
+# openai>=1.14.0           # Needed only for --tts-engine openai or DALL-E 3 images
+
+# ── Already Present in Docling venv ──────────────────────────────────────────
+# torch >= 2.0.0           # GPU inference for Whisper
+# torchaudio               # Audio handling

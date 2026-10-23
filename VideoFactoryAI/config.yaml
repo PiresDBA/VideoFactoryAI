@@ -1,0 +1,66 @@
+# VideoFactoryAI — Configuração Central
+# Edite este arquivo para personalizar o agente sem tocar em nenhum Python.
+
+# ── Narração (TTS) ─────────────────────────────────────────────────────────────
+tts:
+  engine: edge-tts           # edge-tts | f5-tts | openai
+  voice: pt-BR-AntonioNeural # pt-BR-AntonioNeural | pt-BR-FranciscaNeural | pt-BR-ThalitaNeural
+  rate: "+0%"                # velocidade: "-10%" mais lento, "+15%" mais rápido
+  pitch: "+0Hz"              # tom: "-5Hz" mais grave
+
+  # F5-TTS (clonagem de voz local) — só ativo se engine = f5-tts
+  f5_ref_audio: voice/minhavoz_curta.wav
+  f5_ref_text: "Olá, imagine duas nações que já foram aliadas."
+
+  # OpenAI TTS — só ativo se engine = openai
+  openai_voice: onyx         # alloy | echo | fable | onyx | nova | shimmer
+
+# ── Whisper (Legendas) ────────────────────────────────────────────────────────
+whisper:
+  model: base                # tiny | base | small | medium | large
+  language: pt               # código ISO do idioma do roteiro
+  device: auto               # auto | cuda | cpu
+
+# ── Segmentação de Cenas ──────────────────────────────────────────────────────
+scenes:
+  target_duration_s: 12.0    # duração-alvo por cena (segundos)
+  min_duration_s: 5.0        # duração mínima
+  max_duration_s: 25.0       # duração máxima
+
+# ── Busca de Mídia ────────────────────────────────────────────────────────────
+media:
+  pixabay_api_key: "58184749-b92df4cd039274d2c7a6aac7a"
+  ai_image_provider: pollinations    # pollinations | dalle3
+  # openai_api_key: ""               # descomente se usar dalle3 ou tts=openai
+
+# ── FFmpeg / Vídeo ────────────────────────────────────────────────────────────
+video:
+  width: 1920
+  height: 1080
+  fps: 30
+  crf: 20                    # qualidade H.264 (0=lossless, 51=pior). 20 = alta qualidade
+  preset: fast               # ultrafast | fast | medium | slow
+  ken_burns_zoom_speed: 0.0008
+  ken_burns_max_zoom: 1.25
+
+# ── Legendas ──────────────────────────────────────────────────────────────────
+subtitles:
+  font_size: 24
+  primary_color: "&H00FFFFFF"   # branco puro
+  outline_color: "&H00000000"   # preto
+  outline_width: 2
+  shadow: 1
+  margin_v: 35                  # margem do rodapé em pixels
+
+# ── Saídas ────────────────────────────────────────────────────────────────────
+output:
+  video_filename: documentario_final.mp4
+  thumbnail_filename: thumbnail.jpg
+  thumbnail_width: 1280
+  thumbnail_height: 720
+
+# ── Agente / Sistema ──────────────────────────────────────────────────────────
+agent:
+  checkpoint_enabled: true    # salva estado para retomada com --resume
+  verbose: true               # mostra progresso detalhado
+  clean_temp_on_success: false  # apaga temp_clips/ após sucesso
