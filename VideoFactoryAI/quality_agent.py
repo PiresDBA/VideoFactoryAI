@@ -263,46 +263,75 @@ class QualityAgent:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _probe(self, video_path: str) -> Dict:
-        """Retorna metadados via ffprobe."""
+        """Retorna metadados usando ffprobe ou ffmpeg diretamente."""
+        import shutil
+
+        # 1. Tenta ffprobe se disponível
+        ffprobe = str(Path(self.ffmpeg).parent / "ffprobe.exe")
+        if not Path(ffprobe).exists():
+            ffprobe = shutil.which("ffprobe")
+
+        if ffprobe:
+            try:
+                cmd = [
+                    ffprobe, "-v", "quiet",
+                    "-print_format", "json",
+                    "-show_streams", "-show_format",
+                    video_path
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True,
+                                        timeout=30, errors="replace")
+                data = json.loads(result.stdout or "{}")
+                if data.get("streams"):
+                    meta: Dict[str, Any] = {}
+                    for stream in data.get("streams", []):
+                        if stream.get("codec_type") == "video" and "width" not in meta:
+                            meta["width"]       = stream.get("width", 0)
+                            meta["height"]      = stream.get("height", 0)
+                            meta["video_codec"]  = stream.get("codec_name", "")
+                            dur = stream.get("duration")
+                            if dur:
+                                meta["duration_s"] = float(dur)
+                        if stream.get("codec_type") == "audio":
+                            meta["has_audio"]   = True
+                            meta["audio_codec"] = stream.get("codec_name", "")
+
+                    fmt_dur = data.get("format", {}).get("duration")
+                    if fmt_dur:
+                        meta["duration_s"] = float(fmt_dur)
+
+                    meta.setdefault("has_audio", False)
+                    if meta.get("width", 0) > 0:
+                        return meta
+            except Exception:
+                pass
+
+        # 2. Fallback universal usando ffmpeg -i (funciona sempre com o ffmpeg.exe local)
         try:
-            # Localiza ffprobe na mesma pasta do ffmpeg
-            ffprobe = str(Path(self.ffmpeg).parent / "ffprobe.exe")
-            if not Path(ffprobe).exists():
-                ffprobe = "ffprobe"
+            cmd = [self.ffmpeg, "-i", video_path]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=20, errors="replace")
+            output = result.stderr or ""
+            meta: Dict[str, Any] = {"has_audio": False, "width": 0, "height": 0, "duration_s": 0.0}
 
-            cmd = [
-                ffprobe, "-v", "quiet",
-                "-print_format", "json",
-                "-show_streams", "-show_format",
-                video_path
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True,
-                                    timeout=30, errors="replace")
-            data = json.loads(result.stdout or "{}")
-            meta: Dict[str, Any] = {}
+            # Resolução (ex: 1920x1080)
+            res_m = re.search(r",\s*(\d{3,4})x(\d{3,4})", output)
+            if res_m:
+                meta["width"]  = int(res_m.group(1))
+                meta["height"] = int(res_m.group(2))
 
-            for stream in data.get("streams", []):
-                if stream.get("codec_type") == "video" and "width" not in meta:
-                    meta["width"]      = stream.get("width", 0)
-                    meta["height"]     = stream.get("height", 0)
-                    meta["video_codec"] = stream.get("codec_name", "")
-                    # Duração do stream
-                    dur = stream.get("duration")
-                    if dur:
-                        meta["duration_s"] = float(dur)
-                if stream.get("codec_type") == "audio":
-                    meta["has_audio"]  = True
-                    meta["audio_codec"] = stream.get("codec_name", "")
+            # Duração (Duration: HH:MM:SS.ss)
+            dur_m = re.search(r"Duration:\s*(\d+):(\d+):([\d.]+)", output)
+            if dur_m:
+                hh, mm, ss = dur_m.groups()
+                meta["duration_s"] = int(hh) * 3600 + int(mm) * 60 + float(ss)
 
-            # Duração do format (mais confiável)
-            fmt_dur = data.get("format", {}).get("duration")
-            if fmt_dur:
-                meta["duration_s"] = float(fmt_dur)
+            # Presença de áudio
+            if re.search(r"Stream #.*?: Audio:", output):
+                meta["has_audio"] = True
 
-            meta.setdefault("has_audio", False)
             return meta
         except Exception as e:
-            return {"error": str(e), "has_audio": False, "width": 0, "height": 0}
+            return {"error": str(e), "has_audio": False, "width": 0, "height": 0, "duration_s": 0.0}
 
     def _get_duration(self, meta: Dict) -> float:
         return float(meta.get("duration_s", 0))

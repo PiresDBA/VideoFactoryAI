@@ -130,20 +130,17 @@ class ThumbnailAgent:
         if not Path(video_path).exists():
             return False
         try:
-            # Duração
-            ffprobe = str(Path(self.ffmpeg).parent / "ffprobe.exe")
-            if not Path(ffprobe).exists():
-                ffprobe = "ffprobe"
-            cmd_probe = [
-                ffprobe, "-v", "quiet", "-print_format", "json",
-                "-show_format", video_path
-            ]
-            import json as _json
-            result = subprocess.run(cmd_probe, capture_output=True,
-                                    text=True, timeout=15)
-            dur = float(_json.loads(result.stdout or "{}").get(
-                "format", {}).get("duration", 60))
-            seek_s = max(1, dur * seek_pct)
+            # Duração via ffmpeg
+            dur = 60.0
+            cmd_probe = [self.ffmpeg, "-i", video_path]
+            result = subprocess.run(cmd_probe, capture_output=True, text=True, timeout=15, errors="replace")
+            import re
+            m = re.search(r"Duration:\s*(\d+):(\d+):([\d.]+)", result.stderr or "")
+            if m:
+                hh, mm, ss = m.groups()
+                dur = int(hh) * 3600 + int(mm) * 60 + float(ss)
+
+            seek_s = max(1.0, dur * seek_pct)
 
             cmd = [
                 self.ffmpeg, "-ss", str(seek_s), "-i", video_path,

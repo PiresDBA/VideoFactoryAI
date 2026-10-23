@@ -312,30 +312,47 @@ class ScriptWriterAgent:
 
         body_parts = []
         body_parts.append(hooks.get(canal_key, hooks["documentario"]))
+        current_words = len(body_parts[0].split())
 
         if paragraphs:
-            # Seleciona parágrafos enciclopédicos mais relevantes e adapta
-            for p in paragraphs[:6]:
-                # Limpa citações como [1], [2]
+            # Inclui parágrafos enciclopédicos até atingir a meta de palavras desejada
+            for p in paragraphs:
+                if current_words >= target_words - 80:
+                    break
                 clean_p = re.sub(r"\[\d+\]", "", p).strip()
-                if len(clean_p) > 60:
+                if len(clean_p) > 50:
                     body_parts.append(clean_p)
-        else:
-            # Se a enciclopédia veio vazia, constrói narrativa temática sólida
-            body_parts.append(
-                f"Para compreender a verdadeira magnitude de {topic}, é preciso recuar até as raízes que alimentaram "
-                f"esse movimento. As tensões acumuladas ao longo de décadas criaram um terreno propício para que a ruptura ocorresse, "
-                f"envolvendo atores decisivos cujos nomes ficaram gravados de forma indelével nos arquivos do tempo."
-            )
-            body_parts.append(
-                f"À medida que os eventos se desenrolavam, a escalada tornou-se inevitável. As decisões tomadas sob extrema pressão "
-                f"revelaram tanto a fragilidade dos pactos existentes quanto a determinação inabalável de lideranças em defender suas visões, "
-                f"desencadeando consequências que rapidamente ultrapassaram fronteiras e atingiram proporções épicas."
-            )
-            body_parts.append(
-                f"O clímax desse processo representou uma virada sem retorno. Alianças foram testadas, novos equilíbrios se estabeleceram "
-                f"e os impactos sociais e políticos começaram a se fazer sentir em cada recanto afetado por esse desfecho histórico."
-            )
+                    current_words += len(clean_p.split())
+
+        # Se ainda estiver abaixo de 70% da meta de duração, expande com narrativa estruturada
+        if current_words < target_words * 0.7:
+            expansions = [
+                (
+                    f"Para compreender a verdadeira magnitude de {topic}, é preciso recuar até as raízes que alimentaram "
+                    f"esse movimento. As tensões acumuladas ao longo de anos criaram um terreno fértil para que a disputa se aprofundasse, "
+                    f"envolvendo atores decisivos cujas ações ecoaram por continentes inteiros."
+                ),
+                (
+                    f"À medida que as semanas se transformavam em meses, a escalada tornou-se inevitável. Em gabinetes fechados e bases estratégicas, "
+                    f"cada relatório de inteligência era examinado minuciosamente. Decisões tomadas sob extrema pressão revelaram "
+                    f"tanto a fragilidade dos acordos diplomáticos quanto a intransigência de lideranças dispostas a arriscar tudo por sua hegemonia."
+                ),
+                (
+                    f"O clímax desse embate marcou uma virada definitiva. Novas fronteiras foram traçadas, alianças foram testadas ao limite "
+                    f"e a população acompanhou com apreensão o desenrolar de uma disputa onde o menor erro de cálculo poderia resultar "
+                    f"em catástrofe irreversível."
+                ),
+                (
+                    f"A resolução desse impasse exigiu concessões dolorosas e diplomacia de bastidores. Tratados secretos, canais de comunicação de emergência "
+                    f"e o recuo estratégico de forças militares permitiram que a crise encontrasse um desfecho, ainda que temporário, "
+                    f"redesenhando para sempre as regras do jogo internacional."
+                ),
+            ]
+            for exp in expansions:
+                if current_words >= target_words - 80:
+                    break
+                body_parts.append(exp)
+                current_words += len(exp.split())
 
         body_parts.append(outros.get(canal_key, outros["documentario"]))
 
