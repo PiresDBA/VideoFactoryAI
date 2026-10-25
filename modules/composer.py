@@ -30,23 +30,26 @@ def assemble_master_documentary(
     manifest_path: str
 ) -> bool:
     """
-    Concatenate video clips, bind narration audio, burn stylized subtitles,
+    Concatenate video clips, bind narration audio, optionally burn stylized subtitles,
     and render the master documentary MP4.
+    If srt_path is None or doesn't exist, skips subtitle burning.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     # 1. Generate concat manifest
     create_concat_manifest(clips, manifest_path)
     
-    # 2. Escape subtitle path
-    escaped_srt = escape_windows_path_for_ffmpeg(srt_path)
-    
-    # Professional subtitle styling: Font size 24, Pure White text, Crisp Black Outline, Shadow, Centered Bottom
-    subtitle_filter = (
-        f"subtitles='{escaped_srt}':"
-        f"force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-        f"BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=35'"
-    )
+    # 2. Build filter chain: subtitles (optional) + format
+    if srt_path and os.path.exists(srt_path):
+        escaped_srt = escape_windows_path_for_ffmpeg(srt_path)
+        subtitle_filter = (
+            f"subtitles='{escaped_srt}':"
+            f"force_style='FontSize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
+            f"BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=35',"
+            f"format=yuv420p"
+        )
+    else:
+        subtitle_filter = "format=yuv420p"
     
     # 3. Assemble FFmpeg command
     cmd = [

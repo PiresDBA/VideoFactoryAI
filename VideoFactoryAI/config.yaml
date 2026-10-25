@@ -3,10 +3,21 @@
 
 # ── Narração (TTS) ─────────────────────────────────────────────────────────────
 tts:
-  engine: edge-tts           # edge-tts | f5-tts | openai
+  engine: xtts               # edge-tts | xtts | f5-tts | openai
   voice: pt-BR-AntonioNeural # pt-BR-AntonioNeural | pt-BR-FranciscaNeural | pt-BR-ThalitaNeural
   rate: "+0%"                # velocidade: "-10%" mais lento, "+15%" mais rápido
   pitch: "+0Hz"              # tom: "-5Hz" mais grave
+
+  # XTTS-v2 (clonagem da sua voz em GPU) — só ativo se engine = xtts
+  # Requer o ambiente conda 'xtts' já instalado (torch 2.3.1+cu118, TTS, Python 3.10).
+  xtts_python: C:\Users\Pires\miniconda3\envs\xtts\python.exe
+  xtts_speaker_wav: voice/xtts/ale.wav   # amostra limpa da sua voz (10-30s)
+  xtts_worker: voice/xtts/xtts_worker.py
+  xtts_language: pt
+  xtts_use_cuda: true
+  xtts_chunk_chars: 240      # tamanho dos trechos enviados ao modelo
+  xtts_gap_ms: 220           # pausa entre trechos (ms)
+  xtts_timeout_s: 7200       # limite de segurança por narração completa
 
   # F5-TTS (clonagem de voz local) — só ativo se engine = f5-tts
   f5_ref_audio: voice/minhavoz_curta.wav
@@ -17,7 +28,7 @@ tts:
 
 # ── Whisper (Legendas) ────────────────────────────────────────────────────────
 whisper:
-  model: base                # tiny | base | small | medium | large
+  model: medium              # tiny | base | small | medium | large (medium recomendado para PT-BR)
   language: pt               # código ISO do idioma do roteiro
   device: auto               # auto | cuda | cpu
 
@@ -29,7 +40,17 @@ scenes:
 
 # ── Busca de Mídia ────────────────────────────────────────────────────────────
 media:
-  pixabay_api_key: "58184749-b92df4cd039274d2c7a6aac7a"
+  gemini_only: false
+  prefer_real_media: true
+  web_research_before_generation: true
+  revalidate_images: false
+  force_regeneration: false
+  reuse_approved_images: true
+  gemini_fallback: true
+  ignore_cache: false
+  pixabay_api_key: ""
+  pexels_api_key: ""         # Adicione sua chave Pexels para mais vídeos/imagens reais
+  unsplash_api_key: ""       # Adicione sua chave Unsplash para mais fotos reais
   ai_image_provider: pollinations    # pollinations | dalle3
   # openai_api_key: ""               # descomente se usar dalle3 ou tts=openai
 
@@ -38,10 +59,20 @@ video:
   width: 1920
   height: 1080
   fps: 30
-  crf: 20                    # qualidade H.264 (0=lossless, 51=pior). 20 = alta qualidade
-  preset: fast               # ultrafast | fast | medium | slow
+  crf: 18                    # qualidade H.264 (0=lossless, 51=pior). 18 = alta qualidade
+  preset: medium             # ultrafast | fast | medium | slow
+  default_image_effect: auto  # auto | pan | ken_burns_smooth | slide | fade_zoom | static
   ken_burns_zoom_speed: 0.0008
   ken_burns_max_zoom: 1.25
+
+# ── yt-dlp Video Downloader ──────────────────────────────────────────────────
+# Permite baixar vídeos com licença Creative Commons do YouTube, Vimeo, Archive.org
+ytdlp:
+  enabled: true
+  max_search_results: 20
+  format: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+  license_filter: "creativecommons"  # creativecommons | publicdomain | cc-by | cc-by-sa
+  # Para instalar: pip install yt-dlp
 
 # ── Legendas ──────────────────────────────────────────────────────────────────
 subtitles:
@@ -64,3 +95,20 @@ agent:
   checkpoint_enabled: true    # salva estado para retomada com --resume
   verbose: true               # mostra progresso detalhado
   clean_temp_on_success: false  # apaga temp_clips/ após sucesso
+
+# ── Retomada e reutilização ──────────────────────────────────────────────────
+pipeline:
+  resume_mode: true
+  reuse_existing_audio: true  # só reutiliza quando o hash do roteiro coincide
+
+# ── Variáveis de Ambiente Suportadas (sobrescrevem este config) ────────────────
+# VF_MODO_ESCRITA=webchat          # Usa LLMs via navegador (Gemini, ChatGPT, Copilot, DeepSeek)
+# VF_WEBCHAT_DIR=C:\caminho\webchat_bridge  # Pasta do webchat_bridge.py
+# VF_WEBCHAT_SITES=gemini,chatgpt,copilot,deepseek,perplexity  # Ordem dos LLMs
+# VF_WEBCHAT_VALIDAR=resposta      # Validação: nenhum | resposta | envio | ambos
+#
+# VF_IMAGE_EVAL=1                  # Ativa avaliador de imagem↔roteiro (padrão: 1)
+# VF_IMAGE_MIN_SCORE=65            # Score mínimo 0-100 para aprovar imagem (padrão: 65)
+# VF_IMAGE_MAX_RETRIES=3           # Tentativas por cena antes de aceitar fallback (padrão: 3)
+#
+# VF_WHISPER_MODEL=medium          # Modelo Whisper: tiny/base/small/medium/large

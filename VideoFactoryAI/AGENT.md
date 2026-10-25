@@ -91,6 +91,29 @@ O usuário fornece **apenas** o roteiro (ou o `--topic`). O sistema executa todo
 
 ---
 
+## Diretor de Arte — validação cruzada de mídia e sincronização
+
+O passo 4.5 verifica se os assets existem e são legíveis, compara o conteúdo visual com o texto da cena quando o avaliador visual Gemini está configurado, avalia a duração de vídeos e registra a linha do tempo das cenas. O relatório por projeto é salvo como `art_director_report.json`.
+
+Modos por execução:
+
+```bash
+# Padrão: valida e registra problemas, sem interromper o fluxo atual
+python agent.py roteiro.txt --art-director standard
+
+# Rigoroso: interrompe antes do render se houver problemas não resolvidos
+python agent.py roteiro.txt --art-director strict
+
+# Desliga a validação explicitamente
+python agent.py roteiro.txt --art-director off
+```
+
+`standard` é o padrão para preservar a compatibilidade com o pipeline existente. `strict` é recomendado para uma execução final de produção, mas pode interromper o processo se o avaliador visual não estiver instalado/configurado ou se houver assets rejeitados. A comparação lexical entre roteiro e transcrição Whisper é apenas indicativa e não prova equivalência semântica. Sem o Gemini configurado, a validação de conteúdo usa heurísticas e não deve ser tratada como avaliação visual semântica confiável. O relatório registra os problemas que precisam de revisão; não promete correção automática quando nenhum provider consegue obter uma mídia adequada.
+
+A regeneração não apaga mais o asset atual antes de confirmar que existe um arquivo substituto, evitando perda da única mídia disponível quando uma busca falha.
+
+---
+
 ## Sistema de Canais (`--channel` / `--canal`)
 
 O VideoFactoryAI suporta múltiplos canais com identidades visuais, vozes e ritmos próprios:
@@ -117,12 +140,12 @@ Os perfis residem em `VideoFactoryAI/channels/<canal>.yaml` e são mesclados aut
 
 Em conformidade rigorosa com direitos autorais e minimização de custos com IA:
 
-1. **Nível 1 — Vídeos Reais Livres:** Pixabay, Pexels, Wikimedia Commons, Internet Archive.
+1. **Nível 1 — Vídeos com direitos verificáveis:** Pixabay, Pexels, Wikimedia Commons, Internet Archive e YouTube com licença reutilizável explícita (`--youtube-mode cc`). Um arquivo local só é usado com confirmação de autorização (`authorized`/`both`).
 2. **Nível 2 — Imagens Reais Livres:** Wikimedia Commons, Pixabay, Pexels, Unsplash.
 3. **Nível 3 — Conteúdo IA Público:** Openverse (Creative Commons verificável).
-4. **Nível 4 — Geração Própria:** Pollinations AI (1920x1080) com fallback procedural em PIL.
+4. **Nível 4 — Geração própria:** Gemini; se não entregar imagem aprovada, CapCut Dreamina e depois Copilot. Todas as imagens geradas são baixadas como arquivo real e avaliadas contra o tema e o texto da cena.
 
-*Aviso de Copyright:* Vídeos do YouTube **nunca** são baixados ou reutilizados. Cada asset é registrado em `memory/media_report.json`.
+*Direitos de uso:* O modo YouTube CC aceita somente licença reutilizável declarada nos metadados completos; vídeos indisponíveis, sem licença explícita ou sem correspondência com o tema são descartados. A licença e a origem são registradas em `memory/media_report.json`. CC não garante monetização: confira atribuições exigidas e as políticas atuais da plataforma.
 
 ---
 
