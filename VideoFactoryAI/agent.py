@@ -1896,7 +1896,7 @@ def _restaurar_acentos(texto: str) -> str:
 
 
 def generate_subtitles(audio_path: str, srt_out: str, cfg: dict,
-                       script_text: str = "") -> List[Dict]:
+                       script_text: str = "", force: bool = False) -> List[Dict]:
     """
     Passo 3 do Pipeline:
     Executa o modelo faster-whisper (mais rápido, melhor PT-BR) via CTranslate2.
@@ -1910,9 +1910,9 @@ def generate_subtitles(audio_path: str, srt_out: str, cfg: dict,
     - condition_on_previous_text=True
     - Pós-processamento PT-BR + correção fuzzy dos termos do roteiro
 
-    Defina VF_WHISPER_REGERAR=1 para ignorar um SRT existente e transcrever de novo.
+    Use force=True ou VF_WHISPER_REGERAR=1 para ignorar um SRT existente e transcrever de novo.
     """
-    regerar = os.getenv("VF_WHISPER_REGERAR", "0").strip() in ("1", "true", "yes", "sim")
+    regerar = force or os.getenv("VF_WHISPER_REGERAR", "0").strip() in ("1", "true", "yes", "sim")
     if not regerar and os.path.exists(srt_out) and os.path.getsize(srt_out) > 500:
         log("  [Whisper] Legenda SRT já existe — lendo arquivo existente.")
         log("            (use VF_WHISPER_REGERAR=1 para transcrever novamente)")
@@ -2077,6 +2077,23 @@ def generate_subtitles(audio_path: str, srt_out: str, cfg: dict,
             })
 
     log(f"  [Whisper] {len(blocks)} blocos de legenda sincronizados com sucesso (PT-BR corrigido).")
+    return blocks
+
+
+def generate_subtitles_only(
+    audio_path: str, srt_out: str, cfg: dict, script_text: str
+) -> List[Dict]:
+    """Generate a subtitle file from an existing narration without running TTS."""
+    audio_file = Path(audio_path)
+    if not audio_file.is_file() or audio_file.stat().st_size == 0:
+        raise FileNotFoundError(
+            f"Arquivo de narração existente não encontrado ou vazio: {audio_file}"
+        )
+    log(f"  [Legendas] Usando narração existente: {audio_file}")
+    blocks = generate_subtitles(
+        str(audio_file), srt_out, cfg, script_text=script_text, force=True
+    )
+    log(f"  [Legendas] Arquivo SRT pronto: {srt_out}")
     return blocks
 
 
@@ -2365,15 +2382,21 @@ def parse_args():
                    default=None,
                    help="Tamanho do modelo Whisper (padrão: base)")
 
-    # Legendas (padrão: DESLIGADO)
-    p.add_argument("--subtitles",
-                   action="store_true",
-                   default=False,
-                   help="Gera e queima legendas no vídeo (padrão: desligado)")
-    p.add_argument("--no-subtitles",
-                   action="store_true",
-                   default=False,
-                   help="Força desligar legendas (padrão)")
+    # As legendas podem ser desativadas, incluídas no render ou geradas
+    # separadamente usando uma narração já existente.
+    subtitles_group = p.add_mutually_exclusive_group()
+    subtitles_group.add_argument("--subtitles",
+                                 action="store_true",
+                                 default=False,
+                                 help="Gera legendas PT-BR e as queima no vídeo")
+    subtitles_group.add_argument("--no-subtitles",
+                                 action="store_true",
+                                 default=False,
+                                 help="Não gera nem inclui legendas")
+    subtitles_group.add_argument("--subtitles-only",
+                                 action="store_true",
+                                 default=False,
+                                 help="Gera somente o SRT PT-BR da narração existente; não executa o pipeline de vídeo")
 
     # Diretor de Arte: validação cruzada de mídia, cena e timing.
     # standard preserva o fluxo atual; strict bloqueia o render se houver falhas críticas.
@@ -2504,6 +2527,8 @@ def parse_args():
     )
 
     args = p.parse_args()
+    if args.subtitles_only and (not args.roteiro or args.topic):
+        p.error("--subtitles-only exige o caminho do roteiro original e não aceita --topic.")
     if args.youtube_mode in ("authorized", "both"):
         if not args.youtube_authorized_file:
             p.error("--youtube-mode authorized/both exige --youtube-authorized-file com um arquivo LOCAL.")
@@ -2800,14 +2825,21 @@ def main():
     metadados_dir = project_dir / "metadados"
     saida_dir     = ROOT_DIR / "saida"
 
-    # Cria todas as pastas isoladas do projeto e a pasta geral de saída
-    for d in [project_dir, videos_dir, imagens_dir, Path(temp_clips), ckpts_dir, thumbs_dir, metadados_dir, saida_dir]:
-        d.mkdir(parents=True, exist_ok=True)
-
     # Nomes e caminhos oficiais: o master final leva o nome real do tema solicitado!
     video_filename = f"{project_slug}.mp4"
     audio_path     = str(project_dir / "narracao.mp3")
     srt_path_file  = str(project_dir / "narracao.srt")
+    if args.subtitles_only:
+        print("[Legendas] Modo isolado: não haverá geração de voz, busca de mídia nem renderização.")
+        try:
+            generate_subtitles_only(audio_path, srt_path_file, cfg, script_text)
+        except FileNotFoundError as exc:
+            print(f"[ERRO] {exc}", file=sys.stderr)
+            sys.exit(1)
+        return
+    # Cria as pastas de produção somente no fluxo completo.
+    for d in [project_dir, videos_dir, imagens_dir, Path(temp_clips), ckpts_dir, thumbs_dir, metadados_dir, saida_dir]:
+        d.mkdir(parents=True, exist_ok=True)
     # srt_path real para o composer (None se legendas desativadas)
     want_subs      = getattr(args, "subtitles", False) and not getattr(args, "no_subtitles", False)
     srt_path       = srt_path_file if want_subs else None

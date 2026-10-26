@@ -1,44 +1,152 @@
-# Byte-compiled / optimized / DLL files
+# =============================================================================
+# VIDEOFACTORYAI - .gitignore
+# Arquivos e pastas que NÃO devem ser enviados para o GitHub
+# =============================================================================
+
+# =============================================================================
+# 1. Ambientes virtuais e ambientes de desenvolvimento
+# =============================================================================
+.env
+.venv/
+venv/
+venv3/
+doc/
+.docx/
+*.pyc
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Large binary files (GitHub limit: 100MB)
-ffmpeg.exe
-ffprobe.exe
-*.zip
-*.tar.gz
-
-# Video outputs and temporary render files
-saida/*.mp4
-saida/*.mkv
-saida/*.avi
-temp_clips/
-videos/*.mp4
-videos/*.mov
-
-# Audio files
-*.wav
-*.mp3
-resultado_limpo.wav
-narracao.mp3
-
-# Cache and checkpoints
-cache/assets/
-ckpts/
-.cache/
-VideoFactoryAI/__pycache__/
-videofactory/__pycache__/
-
-# Agent and OS metadata
-.gemini/
-.claude/
-.agents/
-Thumbs.db
-Desktop.ini
-.DS_Store
-
-# Environments
+*.so
+.Python
+env/
 venv/
+env/
 .venv/
 env/
+.venv/
+env/
+
+# =============================================================================
+# 2. Arquivos de mídia (VÍDEOS, ÁUDIOS, IMAGENS - não devem subir para GitHub)
+# =============================================================================
+# Vídeos
+*.mp4
+*.mp3
+*.wav
+*.avi
+*.mov
+*.mkv
+*.webm
+*.flv
+*.wmv
+*.avi
+*.srt
+*.vtt
+
+# Imagens
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+*.svg
+*.ico
+
+# Áudios
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.wma
+
+# =============================================================================
+# 3. Diretórios de projetos gerados (cada produção cria sua própria pasta)
+# =============================================================================
+projetos/
+saida/
+imagens/
+temp_clips/
+temp_frames/
+cache/
+metadados/
+thumbnails/
+
+# =============================================================================
+# 4. Arquivos de roteiro gerados automaticamente
+# =============================================================================
+roteiros/*.txt
+!roteiros/queda_de_constantinopla.txt
+!roteiros/segunda_guerra_mundial.txt
+!roteiros/makete_ho.txt
+!roteiros/modelismo_ferroviario.txt
+
+# =============================================================================
+# 5. Arquivos temporários e de depuração
+# =============================================================================
+*.tmp
+*.tmp.txt
+debug_*.py
+fix_*.py
+test_*.py
+testar_*.py
+relatorio_*.json
+relatorio_fontes*.json
+
+# =============================================================================
+# 6. Arquivos de perfil do navegador (perfis do navegador para webchat)
+# =============================================================================
+perfis/
+profiles/
+browser_data/
+
+# =============================================================================
+# 7. Arquivos do FFmpeg (binários)
+# =============================================================================
+ffmpeg/
+ffmpeg-9.0.2-essentials_build/
+ffmpeg.exe
+ffprobe.exe
+
+# =============================================================================
+# 8. Arquivos de voz e áudio da voz clonada
+# =============================================================================
+voice/xtts/*.wav
+voice/xtts/*.wav.bak
+voice/minhavoz*.wav
+voice/xtts/ale.wav
+
+# =============================================================================
+# 9. Ambiente conda e ambientes virtuais
+# =============================================================================
+.env
+.env.local
+.env.production
+.env.development
+.python-version
+.python-version
+
+# =============================================================================
+# 10. Arquivos temporários do sistema
+# =============================================================================
+.DS_Store
+Thumbs.db
+Thumbs.db:eh
+$Recycle.Bin
+$Recycle.Bin/**/*
+
+# =============================================================================
+# 11. Logs e relatórios temporários
+# =============================================================================
+*.log
+*.log.txt
+relatorio_*.json
+relatorio_fontes*.json
+
+# =============================================================================
+# 12. Arquivos temporários do OpenCode e outros
+# =============================================================================
+.opencode/
+agents/

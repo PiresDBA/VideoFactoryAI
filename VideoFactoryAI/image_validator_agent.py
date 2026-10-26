@@ -75,9 +75,11 @@ class ImageValidatorAgent:
         self.min_score = cfg.get("media", {}).get("image_validator_min_score", 65)
         self.max_retries = cfg.get("media", {}).get("image_validator_max_retries", 3)
         self.use_llm = cfg.get("media", {}).get("image_validator_use_llm", True)
+        self._last_content_validation_was_gemini = False
         pipeline_cfg = cfg.get("pipeline", {})
         media_cfg = cfg.get("media", {})
         self.resume_mode = bool(pipeline_cfg.get("resume_mode", False))
+        self.reuse_approved_images = bool(media_cfg.get("reuse_approved_images", True))
         self.revalidate_images = bool(media_cfg.get("revalidate_images", False))
         self.force_regeneration = bool(media_cfg.get("force_regeneration", False))
         self.validated_assets_path = self.project_dir / "memory" / "validated_assets.json"
@@ -157,6 +159,73 @@ class ImageValidatorAgent:
             asset_type=str(scene.get("tipo", "image")),
             query_used=str(scene.get("query", "") or scene.get("wikimedia_q", "")),
         )
+
+    def _resumed_asset_approval(
+        self, scene_id: int, asset_path: str, media_agent
+    ) -> Optional[ValidationResult]:
+        resumed_scene_ids = getattr(media_agent, "resumed_scene_ids", set())
+        if (
+            not self.resume_mode
+            or not self.reuse_approved_images
+            or self.revalidate_images
+            or self.force_regeneration
+            or scene_id not in resumed_scene_ids
+            or not os.path.isfile(asset_path)
+        ):
+            return None
+        scene = next((item for item in self.scenes if item.get("id") == scene_id), {})
+        return ValidationResult(
+            scene_id=scene_id,
+            approved=True,
+            score=100,
+            reason="Asset reutilizado do checkpoint; revalidação desativada",
+            suggestions=[],
+            timing_ok=True,
+            content_ok=True,
+            asset_path=asset_path,
+            asset_type=str(scene.get("tipo", "image")),
+            query_used=str(scene.get("query", "") or scene.get("wikimedia_q", "")),
+        )
+
+    def _gemini_auto_approval(
+        self, scene_id: int, asset_path: str, media_agent
+    ) -> Optional[ValidationResult]:
+        scene = next((item for item in self.scenes if item.get("id") == scene_id), {})
+        if str(scene.get("tipo", "image")).lower() == "video":
+            return None
+        approval = getattr(media_agent, "gemini_approved_assets", {}).get(scene_id)
+        if not isinstance(approval, dict) or approval.get("approved") is not True:
+            return None
+        try:
+            score = float(approval.get("score", 0))
+        except (TypeError, ValueError):
+            return None
+        if score <= 85 or not os.path.isfile(asset_path):
+            return None
+        if os.path.normcase(os.path.abspath(str(approval.get("asset", "")))) != os.path.normcase(os.path.abspath(asset_path)):
+            return None
+        try:
+            current_hash = _sha256_file(asset_path)
+        except OSError as exc:
+            self.log(f"[ImageValidator] Não foi possível verificar o asset aprovado pelo Gemini {scene_id}: {exc}", warn=True)
+            return None
+        if approval.get("sha256") != current_hash:
+            return None
+        file_ok, _ = self._validate_file(asset_path, "image")
+        if not file_ok:
+            return None
+        return ValidationResult(
+            scene_id=scene_id,
+            approved=True,
+            score=score,
+            reason=f"Gemini aprovou com score {score:g} (>85); validação do Diretor de Arte ignorada",
+            suggestions=[],
+            timing_ok=True,
+            content_ok=True,
+            asset_path=asset_path,
+            asset_type="image",
+            query_used=str(scene.get("query", "") or scene.get("wikimedia_q", "")),
+        )
     
     def _extract_scene_texts(self) -> Dict[int, str]:
         """Mapeia scene_id -> texto narrado daquela cena."""
@@ -187,6 +256,24 @@ class ImageValidatorAgent:
                     query_used=str(scene.get("query", "") or scene.get("wikimedia_q", "")),
                     regenerate=True
                 )
+                continue
+
+            resumed_result = self._resumed_asset_approval(sid, asset_path, media_agent)
+            if resumed_result:
+                results[sid] = resumed_result
+                self.log(f"[ImageValidator] [RESUME] Cena {sid:02d}: asset do checkpoint reutilizado; validação ignorada.")
+                continue
+
+            gemini_result = self._gemini_auto_approval(sid, asset_path, media_agent)
+            if gemini_result:
+                results[sid] = gemini_result
+                self.validated_assets[str(sid)] = {
+                    "asset": asset_path,
+                    "approved": True,
+                    "hash": _sha256_file(asset_path),
+                }
+                self._save_validated_assets()
+                self.log(f"[ImageValidator] [Gemini] Cena {sid:02d}: score {gemini_result.score:g} (>85); aceita automaticamente.")
                 continue
             
             retry = 0
@@ -288,15 +375,31 @@ class ImageValidatorAgent:
             content_ok, content_score, content_reason, suggestions, corrected_query = \
                 self._validate_content_heuristic(scene_text, query_used, asset_type)
         
-        # Score combinado
-        final_score = content_score * 0.7 + (100 if timing_ok else 30) * 0.3
-        approved = (final_score >= self.min_score) and content_ok and timing_ok
+        gemini_high_score = (
+            self._last_content_validation_was_gemini
+            and self.use_llm
+            and asset_type == "image"
+            and content_score > 85
+        )
+        if gemini_high_score:
+            final_score = content_score
+            approved = timing_ok
+            reason = (
+                f"Gemini aprovou com score {content_score:g} (>85); "
+                "validação do Diretor de Arte ignorada"
+                if approved else timing_reason
+            )
+            corrected_query = None
+        else:
+            final_score = content_score * 0.7 + (100 if timing_ok else 30) * 0.3
+            approved = (final_score >= self.min_score) and content_ok and timing_ok
+            reason = content_reason if not content_ok else (timing_reason if not timing_ok else "OK")
         
         return ValidationResult(
             scene_id=sid,
             approved=approved,
             score=round(final_score, 1),
-            reason=content_reason if not content_ok else (timing_reason if not timing_ok else "OK"),
+            reason=reason,
             suggestions=suggestions,
             timing_ok=timing_ok,
             content_ok=content_ok,
@@ -371,6 +474,7 @@ class ImageValidatorAgent:
         query_used: str, topic: str
     ) -> Tuple[bool, float, str, List[str], Optional[str]]:
         """Valida imagem ou amostras temporais de vídeo usando Gemini."""
+        self._last_content_validation_was_gemini = False
         frame_paths: List[str] = []
         try:
             if asset_type == "video":
@@ -419,9 +523,13 @@ Responda APENAS em JSON:
                 )
             )
             result = json.loads(response.text)
+            score = float(result.get("score", 0))
+            if not 0 <= score <= 100:
+                raise ValueError("Gemini retornou score fora da faixa 0–100")
+            self._last_content_validation_was_gemini = True
             return (
                 bool(result.get("approved", False)),
-                float(result.get("score", 0)),
+                score,
                 str(result.get("reason", "LLM evaluation")),
                 result.get("suggestions", []) if isinstance(result.get("suggestions", []), list) else [],
                 result.get("corrected_query") if not result.get("approved", False) else None
