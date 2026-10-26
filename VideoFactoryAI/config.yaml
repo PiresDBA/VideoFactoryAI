@@ -61,9 +61,7 @@ video:
   fps: 30
   crf: 18                    # qualidade H.264 (0=lossless, 51=pior). 18 = alta qualidade
   preset: medium             # ultrafast | fast | medium | slow
-  default_image_effect: auto  # auto | pan | ken_burns_smooth | slide | fade_zoom | static
-  ken_burns_zoom_speed: 0.0008
-  ken_burns_max_zoom: 1.25
+  default_image_effect: auto  # auto | pan | slide | static
 
 # ── yt-dlp Video Downloader ──────────────────────────────────────────────────
 # Permite baixar vídeos com licença Creative Commons do YouTube, Vimeo, Archive.org

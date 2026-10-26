@@ -5,9 +5,11 @@ Não cria placeholders. Requer Playwright e login manual no perfil persistente.
 from __future__ import annotations
 
 import base64
+import atexit
 import json
 import os
 import re
+import threading
 import time
 import unicodedata
 from pathlib import Path
@@ -36,6 +38,9 @@ IMAGE_LIMIT_PATTERNS = (
     "limite de geracao",
     "muitas solicitacoes",
 )
+
+_GEMINI_SESSION = None
+_GEMINI_SESSION_LOCK = threading.RLock()
 
 
 def _normalize_limit_text(text: str) -> str:
@@ -71,40 +76,119 @@ def _timeout_ms() -> int:
         return 180_000
 
 
-def _open_gemini():
+def _start_playwright():
     try:
         from playwright.sync_api import sync_playwright
     except Exception as exc:
         raise RuntimeError("Playwright não está instalado no ambiente Python do VideoFactoryAI.") from exc
-    pw = sync_playwright().start()
-    profile = _profile_dir()
-    profile.mkdir(parents=True, exist_ok=True)
+    return sync_playwright().start()
+
+
+def _navigate_gemini(page):
+    page.goto(
+        os.environ.get("VF_GEMINI_URL", "https://gemini.google.com/app"),
+        wait_until="domcontentloaded",
+        timeout=60_000,
+    )
+    page.wait_for_timeout(1800)
+
+
+def _open_gemini():
+    global _GEMINI_SESSION
+    owner_thread = threading.get_ident()
+    with _GEMINI_SESSION_LOCK:
+        if _GEMINI_SESSION is not None:
+            pw, context, session_thread, _keeper_page = _GEMINI_SESSION
+            if session_thread != owner_thread:
+                raise GeminiSessionError(
+                    "A sessão Playwright do Gemini não pode ser compartilhada entre threads."
+                )
+            try:
+                if context.browser is not None:
+                    page = context.new_page()
+                    _navigate_gemini(page)
+                    return pw, context, page
+            except Exception as exc:
+                if "closed" not in str(exc).lower():
+                    raise
+            close_gemini_session()
+
+        pw = _start_playwright()
+        context = None
+        try:
+            profile = _profile_dir()
+            profile.mkdir(parents=True, exist_ok=True)
+            context = pw.chromium.launch_persistent_context(
+                user_data_dir=str(profile),
+                headless=False,
+                accept_downloads=True,
+                viewport={"width": 1440, "height": 1000},
+                args=["--disable-blink-features=AutomationControlled"],
+            )
+            keeper_page = context.pages[0] if context.pages else context.new_page()
+            _navigate_gemini(keeper_page)
+            page = context.new_page()
+            _GEMINI_SESSION = (pw, context, owner_thread, keeper_page)
+            _navigate_gemini(page)
+            return pw, context, page
+        except Exception:
+            if context is not None:
+                try:
+                    context.close()
+                finally:
+                    pw.stop()
+            else:
+                pw.stop()
+            _GEMINI_SESSION = None
+            raise
+
+
+def _close_gemini_at_exit():
     try:
-        context = pw.chromium.launch_persistent_context(
-            user_data_dir=str(profile),
-            headless=False,
-            accept_downloads=True,
-            viewport={"width": 1440, "height": 1000},
-            args=["--disable-blink-features=AutomationControlled"],
-        )
-    except Exception:
-        pw.stop()
-        raise
+        close_gemini_session()
+    except Exception as exc:
+        print(f"[GeminiWebchat] Falha ao encerrar navegador: {exc}")
+
+
+def _close_gemini_page(page):
+    if page is None:
+        return
     try:
-        page = context.pages[0] if context.pages else context.new_page()
-        page.goto(
-            os.environ.get("VF_GEMINI_URL", "https://gemini.google.com/app"),
-            wait_until="domcontentloaded",
-            timeout=60_000,
-        )
-        page.wait_for_timeout(1800)
-        return pw, context, page
-    except Exception:
+        if not page.is_closed():
+            page.close()
+    except Exception as exc:
+        print(f"[GeminiWebchat] Falha ao fechar aba da conversa: {exc}")
+
+
+def close_gemini_session():
+    """Encerra o navegador persistente, usado uma vez ao final do processo."""
+    global _GEMINI_SESSION
+    with _GEMINI_SESSION_LOCK:
+        session = _GEMINI_SESSION
+        _GEMINI_SESSION = None
+        if session is None:
+            return
+        pw, context, owner_thread, _keeper_page = session
+        if owner_thread != threading.get_ident():
+            _GEMINI_SESSION = session
+            raise GeminiSessionError(
+                "A sessão Playwright do Gemini deve ser encerrada pela thread que a criou."
+            )
+
+        errors = []
         try:
             context.close()
-        finally:
+        except Exception as exc:
+            errors.append(f"contexto: {exc}")
+        try:
             pw.stop()
-        raise
+        except Exception as exc:
+            errors.append(f"Playwright: {exc}")
+        if errors:
+            raise RuntimeError("Não foi possível encerrar a sessão Gemini (" + "; ".join(errors) + ").")
+
+
+atexit.register(_close_gemini_at_exit)
 
 
 def _ensure_session_active(context, page) -> None:
@@ -342,8 +426,6 @@ def generate_image(
     try:
         pw, context, page = _open_gemini()
         before_research_text = page.inner_text("body") or ""
-        prior_srcs = _image_src_snapshot(page)
-        prior_button_count = len(_download_buttons(page))
         if web_research_before_generation:
             before_research = _response_snapshot(page)
             research_summary = research_visual_description(
@@ -360,6 +442,9 @@ def generate_image(
                 raise RuntimeError(f"Gemini image generation limit reached: {limit_message}")
             if research_summary:
                 prompt = build_image_prompt(prompt, research_summary)
+        # Exclui thumbnails/resultados da pesquisa para aceitar somente a imagem gerada.
+        prior_srcs = _image_src_snapshot(page)
+        prior_button_count = len(_download_buttons(page))
         instruction = (
             "Gere uma IMAGEM original para uma cena de vídeo documental/educacional. "
             "Não responda apenas com texto: produza a imagem. "
@@ -427,16 +512,7 @@ def generate_image(
             raise GeminiSessionError(f"Sessão do Gemini indisponível: {exc}") from exc
         return None
     finally:
-        try:
-            if context:
-                context.close()
-        except Exception:
-            pass
-        try:
-            if pw:
-                pw.stop()
-        except Exception:
-            pass
+        _close_gemini_page(page)
 
 
 def _extract_eval_object(text: str):
@@ -623,13 +699,4 @@ def evaluate_image(image_path, scene_text, query_used="", scene_id=1, topic=""):
         print(f"[GeminiWebchat] Avaliação visual falhou: {exc}")
         return None
     finally:
-        try:
-            if context:
-                context.close()
-        except Exception:
-            pass
-        try:
-            if pw:
-                pw.stop()
-        except Exception:
-            pass
+        _close_gemini_page(page)

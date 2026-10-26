@@ -277,6 +277,20 @@ def _file_hash(filepath: str) -> str:
         return ""
 
 
+def _asset_sha256(filepath: str) -> str:
+    """Hash media content for matching a Gemini verdict to the exact asset."""
+    if not filepath or not os.path.isfile(filepath):
+        return ""
+    digest = hashlib.sha256()
+    try:
+        with open(filepath, "rb") as asset_file:
+            for chunk in iter(lambda: asset_file.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except OSError:
+        return ""
+
+
 # =============================================================================
 # NÍVEL 1 — VÍDEO REAL LIVRE
 # =============================================================================
@@ -1316,6 +1330,7 @@ class MediaResearchAgent:
         self.youtube_mode = str(media_cfg.get("youtube_mode", "off") or "off").lower()
         pipeline_cfg = cfg.get("pipeline", {})
         self.resume_mode = bool(pipeline_cfg.get("resume_mode", False))
+        self.resumed_scene_ids = set()
         self.force_regeneration = bool(media_cfg.get("force_regeneration", False))
         self.ignore_cache = bool(media_cfg.get("ignore_cache", False))
         self.web_research_before_generation = bool(
@@ -1372,6 +1387,7 @@ class MediaResearchAgent:
         self.used_urls: set = set()
         self.used_hashes: Dict[str, int] = {}   # hash_md5 → scene_id que já usa esse asset
         self.seen_visual_hashes: Dict[int, int] = {}  # dHash → primeira cena/candidata avaliada
+        self.gemini_approved_assets: Dict[int, Dict[str, Any]] = {}
         self.used_paths: Dict[str, int] = {}     # filepath  → scene_id
 
         # Carrega preferências aprendidas
@@ -1547,8 +1563,9 @@ class MediaResearchAgent:
                 score = max(0, min(100, int(visual.get("score", 0))))
                 reason = str(visual.get("reason", "Sem justificativa retornada"))
                 threshold = int(os.environ.get("VF_IMAGE_EVAL_MIN_SCORE", "65"))
-                approved = visual["approved"] and score >= threshold
-                print(f"    [ImageEval/Gemini] {'✓ APROVADO' if approved else '✗ REPROVADO'} (score={score}, mínimo={threshold}): {reason}")
+                approved = score > 85 or (visual["approved"] and score >= threshold)
+                score_override = " | aprovado pelo score >85" if score > 85 and not visual["approved"] else ""
+                print(f"    [ImageEval/Gemini] {'✓ APROVADO' if approved else '✗ REPROVADO'} (score={score}, mínimo={threshold}): {reason}{score_override}")
                 if not approved:
                     try:
                         self._last_visual_feedback = reason
@@ -1560,6 +1577,15 @@ class MediaResearchAgent:
                         pass
                 if approved and visual_hash is not None:
                     self.seen_visual_hashes[visual_hash] = int(scene["id"])
+                if approved and score > 85:
+                    asset_sha256 = _asset_sha256(media_path)
+                    if asset_sha256:
+                        self.gemini_approved_assets[int(scene["id"])] = {
+                            "approved": True,
+                            "asset": os.path.abspath(media_path),
+                            "score": score,
+                            "sha256": asset_sha256,
+                        }
                 return approved
             except Exception as exc:
                 print(f"    [ImageEval/Gemini] Falha: {exc}; rejeitando imagem sem avaliação visual real.")
@@ -1700,6 +1726,10 @@ class MediaResearchAgent:
             and os.path.getsize(dest_path) > (MIN_VIDEO_SIZE if is_video else MIN_IMAGE_SIZE)
         ):
             print(f"    [RESUME] Cena {sid:02d} já concluída: {Path(dest_path).name}")
+            resumed_scene_ids = getattr(self, "resumed_scene_ids", None)
+            if resumed_scene_ids is None:
+                resumed_scene_ids = self.resumed_scene_ids = set()
+            resumed_scene_ids.add(sid)
             f_hash = _file_hash(dest_path)
             if f_hash:
                 self.used_hashes[f_hash] = sid
@@ -2331,7 +2361,15 @@ class MediaResearchAgent:
 
         asset_map: Dict[int, str] = {}
         total = len(scenes)
+        cached_clip_scene_ids = set()
         if self.resume_mode and not self.force_regeneration:
+            clips_dir = Path(self.root) / "temp_clips"
+            cached_clip_scene_ids = {
+                int(scene["id"])
+                for scene in scenes
+                if (clips_dir / f"clip_{int(scene['id']):02d}.mp4").is_file()
+                and (clips_dir / f"clip_{int(scene['id']):02d}.mp4").stat().st_size > 50_000
+            }
             existing_assets = {
                 scene["id"]: self._dest_path(scene)
                 for scene in scenes
@@ -2343,17 +2381,28 @@ class MediaResearchAgent:
                 image_min_bytes=MIN_IMAGE_SIZE,
                 video_min_bytes=MIN_VIDEO_SIZE,
             )
+            completed_from_clips = len(
+                cached_clip_scene_ids.intersection(report["pending_scene_ids"])
+            )
             print(
                 "\n" + "=" * 20 + " RESUME REPORT " + "=" * 20 + "\n"
                 f"Total cenas: {report['total']}\n"
-                f"Já concluídas: {report['completed']}\n"
-                f"Faltando: {report['pending']}\n"
-                f"Serão processadas: {report['to_process']}\n"
+                f"Já concluídas: {report['completed'] + completed_from_clips}\n"
+                f"Faltando: {report['pending'] - completed_from_clips}\n"
+                f"Serão processadas: {report['to_process'] - completed_from_clips}\n"
                 + "=" * 55
             )
 
         for idx, scene in enumerate(scenes, 1):
             sid = scene["id"]
+            if sid in cached_clip_scene_ids and not self._asset_valid(
+                self._dest_path(scene), scene["tipo"] == "video"
+            ):
+                print(
+                    f"    [RESUME] Cena {sid:02d} já tem clipe renderizado; "
+                    "não repetir busca nem geração de mídia."
+                )
+                continue
             print(f"\n  [{idx:02d}/{total:02d}] Pesquisando midia para cena {sid:02d}...")
             path = self.source_scene(scene)
             if path:

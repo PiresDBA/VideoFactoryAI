@@ -1,0 +1,104 @@
+{
+  "chatgpt": {
+    "url": "https://chatgpt.com",
+    "input": "div#prompt-textarea, #prompt-textarea, div[contenteditable=\"true\"][role=\"textbox\"][aria-label^=\"Pergunte\"], div[contenteditable=\"true\"][role=\"textbox\"]",
+    "send": "button[data-testid='send-button']",
+    "response": "[data-message-author-role='assistant']",
+    "busy": "button[aria-label=\"Parar\"]",
+    "perfil": {
+      "estilo": "nenhum",
+      "enter_send": true,
+      "max_chars": 20000,
+      "ok": 9,
+      "falhas": 4,
+      "seguidas": 0,
+      "lat": 23.9,
+      "cooldown": 1792886213.366555
+    }
+  },
+  "gemini": {
+    "url": "https://gemini.google.com/app",
+    "input": "rich-textarea div[contenteditable='true']",
+    "send": "button[aria-label*='Enviar'], button[aria-label*='Send']",
+    "response": "message-content",
+    "busy": "button[aria-label*='Parar'], button[aria-label*='Stop']",
+    "perfil": {
+      "estilo": "colchetes",
+      "enter_send": true,
+      "max_chars": 20000,
+      "ok": 60,
+      "falhas": 1,
+      "seguidas": 0,
+      "lat": 11.9,
+      "cooldown": 0
+    }
+  },
+  "claude": {
+    "url": "https://claude.ai/new",
+    "input": "div[contenteditable='true']",
+    "send": "button[aria-label*='Send'], button[aria-label*='Enviar']",
+    "response": "div.font-claude-message",
+    "busy": "button[aria-label*='Stop'], button[aria-label*='Parar']",
+    "perfil": {
+      "estilo": null,
+      "enter_send": null,
+      "max_chars": 20000,
+      "ok": 0,
+      "falhas": 0,
+      "seguidas": 0,
+      "lat": 0.0,
+      "cooldown": 0
+    }
+  },
+  "copilot": {
+    "url": "https://copilot.microsoft.com",
+    "input": "textarea",
+    "send": "button[aria-label*='Submit'], button[aria-label*='Enviar']",
+    "response": "[data-content='ai-message']",
+    "busy": "button[aria-label*='Stop'], button[aria-label*='Parar']",
+    "perfil": {
+      "estilo": null,
+      "enter_send": null,
+      "max_chars": 20000,
+      "ok": 0,
+      "falhas": 5,
+      "seguidas": 5,
+      "lat": 0.0,
+      "cooldown": 1792886246.9393284
+    }
+  },
+  "perplexity": {
+    "url": "https://www.perplexity.ai",
+    "input": "div[contenteditable='true'], textarea",
+    "send": "button[aria-label*='Submit'], button[aria-label*='Enviar']",
+    "response": "div[id^='markdown-content']",
+    "busy": "",
+    "perfil": {
+      "estilo": null,
+      "enter_send": false,
+      "max_chars": 20000,
+      "ok": 2,
+      "falhas": 0,
+      "seguidas": 0,
+      "lat": 46.2,
+      "cooldown": 0
+    }
+  },
+  "deepseek": {
+    "url": "https://chat.deepseek.com",
+    "input": "textarea",
+    "send": "",
+    "response": "div.ds-markdown",
+    "busy": "",
+    "perfil": {
+      "estilo": null,
+      "enter_send": true,
+      "max_chars": 20000,
+      "ok": 4,
+      "falhas": 4,
+      "seguidas": 4,
+      "lat": 30.4,
+      "cooldown": 1792886269.1675217
+    }
+  }
+}
