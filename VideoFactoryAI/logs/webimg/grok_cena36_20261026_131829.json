@@ -1,0 +1,40 @@
+{
+  "imgs": [
+    {
+      "src": "https://assets.grok.com/users/b551bf7e-94a1-4c05-993f-dd854020e396/VccS8lIzEPPxKxTS-profile-picture.webp",
+      "w": 300,
+      "h": 300,
+      "visivel": true
+    },
+    {
+      "src": "https://cdn.cookielaw.org/logos/9dab7956-8e3b-4787-bcc5-96b37152bafe/019f6b9d-2346-78a0-9fc5-0588ffe658c7/c083d6cd-ea33-",
+      "w": 1668,
+      "h": 636,
+      "visivel": false
+    },
+    {
+      "src": "https://cdn.cookielaw.org/logos/static/powered_by_logo.svg",
+      "w": 568,
+      "h": 53,
+      "visivel": false
+    }
+  ],
+  "botoes": [
+    {
+      "rotulo": "Salvar",
+      "visivel": true
+    }
+  ],
+  "campos": [
+    {
+      "tag": "DIV",
+      "visivel": true,
+      "dica": "Pergunte ao Grok qualquer coisa"
+    },
+    {
+      "tag": "TEXTAREA",
+      "visivel": true,
+      "dica": ""
+    }
+  ]
+}

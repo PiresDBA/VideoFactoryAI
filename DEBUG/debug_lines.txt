@@ -1,0 +1,17 @@
+1849:     # PASSO 3/10 — Transcrição e Geração de Legendas (Whisper)
+1850:     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1851:     print("[3/10] Geração de legendas (Whisper)...")
+1852:     srt_blocks = generate_subtitles(audio_path, srt_path, cfg, script_text=script_text)
+1853:     scenes     = resync_scenes(scenes, srt_blocks, audio_dur)
+1854:     log(f"  Timecodes ressincronizados com precisão para {len(scenes)} cenas.")
+1855:     if not args.no_checkpoint:
+1856:         state["scenes"]     = scenes
+1857:         state["srt_path"]   = srt_path
+1858:         state["srt_blocks"] = srt_blocks
+1859:         save_checkpoint(state, checkpoint)
+1860:     print("  [OK]\n")
+1861: 
+1862:     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1863:     # PASSO 4/10 — Busca de Mídia com Compliance (L1 a L4)
+1864:     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1865:     print("[4/10] Busca de mídia (Hierarquia L1 vídeo -> L2 imagem -> L3 IA pública -> L4 IA gerada)...")

@@ -1,0 +1,58 @@
+{
+  "provedor": "grok",
+  "prompt": "Maquete ferroviária HO com uma locomotiva a vapor numa curva, luz natural, sem texto.",
+  "limite_de_geracao_detectado": "limite de geração atingido no site (resposta: 'limite de imagens'). Este provedor fica pulado até o fim desta execução.",
+  "tempo_ate_primeira_imagem_s": null,
+  "limite_s": 300,
+  "imagens_novas": [],
+  "pagina": {
+    "url": "https://grok.com/c/ee065e2c-ef64-4bbf-9ebe-7c5aa3c3ef00?rid=42c024db-f4c1-4db9-80f9-ef5a816f96db",
+    "texto_fim": "apor\nImagem de paisagem para cena de documentário com relógio de bolso antigo\nGeração de imagem documental sobre bulldogue inglês\nGeração de imagem cena café da manhã com bulldogue inglês\nGeração de imagem paisagem documentário bulldogue inglês\nGeração de imagem de cena documental com bulldogue\nGeração de imagem paisagem Makete HO Cena 46\nBate-papo de 25/10/2026\nGeração de imagem paisagem para cena documental makete HO\nGeração de imagem paisagem esponja triturada\nGeração de imagem paisagem documental Makete HO\nGeração de imagem paisagem maquete HO noturna\nVer todos\nPlugins\nAlexandre Pires\nMaquete ferroviária HO com locomotiva a vapor em curva\nVocê\n\nMaquete ferroviária HO com uma locomotiva a vapor numa curva, luz natural, sem texto.\n\nGrok\nTrabalhou por 24s\n\nLimite de imagens atingido\n\nVocê usou suas gerações de imagens.\nPor favor, tente novamente mais tarde.\n\nAprimorar\n\n\n\n\nFast\nGrok terminou de responder\nClose\n\nEssential cookies keep the site working and stay on. Optional cookies help with performance and advertising — accept, reject, or manage them. Learn more in our Cookie Policy, Privacy Policy, and Terms of Service.\n\nDefinições de cookies\nRejeitar todos\nAceitar todos os cookies",
+    "imgs": [
+      {
+        "src": "https://assets.grok.com/users/b551bf7e-94a1-4c05-993f-dd854020e396/VccS8lIzEPPxKxTS-profile-picture.webp",
+        "w": 300,
+        "h": 300,
+        "visivel": true
+      },
+      {
+        "src": "https://cdn.cookielaw.org/logos/9dab7956-8e3b-4787-bcc5-96b37152bafe/019f6b9d-2346-78a0-9fc5-0588ffe658c7/c083d6cd-ea33-4720-82a2-d224ee8eb4",
+        "w": 1668,
+        "h": 636,
+        "visivel": false
+      },
+      {
+        "src": "https://cdn.cookielaw.org/logos/static/powered_by_logo.svg",
+        "w": 568,
+        "h": 53,
+        "visivel": false
+      }
+    ],
+    "botoes": [
+      {
+        "rotulo": "Copiar",
+        "visivel": true
+      },
+      {
+        "rotulo": "Salvar",
+        "visivel": true
+      },
+      {
+        "rotulo": "Copiar resposta",
+        "visivel": true
+      }
+    ],
+    "campos": [
+      {
+        "tag": "DIV",
+        "visivel": true,
+        "dica": "Pergunte ao Grok qualquer coisa"
+      },
+      {
+        "tag": "TEXTAREA",
+        "visivel": true,
+        "dica": ""
+      }
+    ]
+  }
+}

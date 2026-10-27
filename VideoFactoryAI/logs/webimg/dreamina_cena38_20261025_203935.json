@@ -1,0 +1,100 @@
+{
+  "imgs": [
+    {
+      "src": "https://p16-capcut-sg.ibyteimg.com/tos-alisg-i-9w50xwpexm/8ac8a55187b2426b8d7d886e5777de86~tplv-9w50xwpexm-custom:0.webp",
+      "w": 4320,
+      "h": 120,
+      "visivel": true
+    },
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKEAAAChCAMAAACYjy+EAAADAFBMVEVHcEwIgPgaqPYIgflUz+kVoPUOePwHkvYFkvYaqPQFkv",
+      "w": 161,
+      "h": 161,
+      "visivel": true
+    },
+    {
+      "src": "https://sf16-passport-sg.ibytedtos.com/img/user-avatar-alisg/jhhkpvwiqgisfyb91y74rxirhpbcr5tv~120x256.image",
+      "w": 120,
+      "h": 120,
+      "visivel": true
+    },
+    {
+      "src": "https://sf16-passport-sg.ibytedtos.com/img/user-avatar-alisg/jhhkpvwiqgisfyb91y74rxirhpbcr5tv~120x256.image",
+      "w": 120,
+      "h": 120,
+      "visivel": true
+    },
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEIAAABICAMAAAB1EdO8AAAC+lBMVEUAAAAgcaUOW6kkmN5owNlSvt+JxdJuxeBbweP+lTsopO",
+      "w": 66,
+      "h": 72,
+      "visivel": false
+    },
+    {
+      "src": "https://p16-dreamina-sign-sg.ibyteimg.com/tos-alisg-i-wopfjsm1ax-sg/a259d60bd39f450fa557e5d861aef0e5~tplv-wopfjsm1ax-res",
+      "w": 1280,
+      "h": 720,
+      "visivel": true
+    },
+    {
+      "src": "https://p16-dreamina-sign-sg.ibyteimg.com/tos-alisg-i-wopfjsm1ax-sg/d0d78f0cb27c4b6aab0b1ca493088f26~tplv-wopfjsm1ax-res",
+      "w": 1280,
+      "h": 720,
+      "visivel": true
+    },
+    {
+      "src": "https://p16-dreamina-sign-sg.ibyteimg.com/tos-alisg-i-wopfjsm1ax-sg/7eb5013e969d438296b7bb8a932202ef~tplv-wopfjsm1ax-res",
+      "w": 1280,
+      "h": 720,
+      "visivel": true
+    },
+    {
+      "src": "https://sf16-passport-sg.ibytedtos.com/img/user-avatar-alisg/jhhkpvwiqgisfyb91y74rxirhpbcr5tv~tplv-resize:100:0.image",
+      "w": 100,
+      "h": 100,
+      "visivel": false
+    },
+    {
+      "src": "https://bat.bing.com/action/0?ti=97212351&Ver=2&mid=2c42cf6f-d12c-48a1-bcba-0f5a4dbebf9c&bo=2&sid=88933ad0d07b11f181a407",
+      "w": 0,
+      "h": 0,
+      "visivel": false
+    },
+    {
+      "src": "https://bat.bing.com/action/0?ti=97212351&Ver=2&mid=35d9a8b1-0418-460d-94b3-eae59e2f2f05&bo=1&sid=88933ad0d07b11f181a407",
+      "w": 0,
+      "h": 0,
+      "visivel": false
+    },
+    {
+      "src": "https://p16-capcut-sg.ibyteimg.com/tos-alisg-i-9w50xwpexm/d08ea1da10a247febf76f87bce5e5ddf~tplv-9w50xwpexm-custom:0.webp",
+      "w": 3000,
+      "h": 456,
+      "visivel": true
+    },
+    {
+      "src": "https://p16-capcut-sg.ibyteimg.com/tos-alisg-i-9w50xwpexm/7c0149b5bb2348bd998c48d61a90abda~tplv-9w50xwpexm-custom:0.webp",
+      "w": 36,
+      "h": 36,
+      "visivel": true
+    }
+  ],
+  "botoes": [],
+  "campos": [
+    {
+      "tag": "TEXTAREA",
+      "visivel": false,
+      "dica": "Describe the image you're imagining"
+    },
+    {
+      "tag": "DIV",
+      "visivel": true,
+      "dica": "Prompt"
+    },
+    {
+      "tag": "DIV",
+      "visivel": true,
+      "dica": ""
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+PATCH VideoFactoryAI — busca/download YouTube (modo both)
+
+Arquivo alterado: ytdlp_downloader.py
+
+Instalação conservadora:
+1. Feche o VideoFactoryAI.
+2. Faça backup do arquivo atual ytdlp_downloader.py.
+3. Copie o arquivo deste ZIP para o mesmo local do arquivo original (a pasta onde media_research_agent.py consegue importá-lo).
+4. Execute usando o Python do ambiente do projeto e confira o log [yt-dlp].
+
+O módulo agora usa preferencialmente `sys.executable -m yt_dlp`, evita a duplicação de _check_ytdlp_available que antes sobrescrevia a verificação de importação, não trata palavras na descrição/tags como prova de licença, consulta os metadados completos de cada candidato e localiza a extensão real baixada antes de mover para o destino esperado. Licenças NC e licenças não explícitas são rejeitadas.
+
+IMPORTANTE: este patch corrige a trilha de busca/download YouTube. Ele não modifica o avaliador visual/extração de frames; esse erro requer o arquivo atual do ImageEvaluatorAgent para uma correção segura. O ZIP não afirma que foi feito teste de rede/YouTube.

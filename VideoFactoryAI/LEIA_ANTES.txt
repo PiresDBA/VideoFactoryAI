@@ -1,0 +1,33 @@
+VideoFactoryAI — correção FFmpeg, filtros visuais e Diretor de Arte
+
+ARQUIVOS INCLUÍDOS
+- agent.py
+- modules/visual_processor.py
+- modules/media_engine.py
+
+O QUE FOI CORRIGIDO
+1. Filtro slide: o código antigo colocava x=/y= como se fossem filtros independentes, sintaxe inválida no FFmpeg. Agora o efeito usa uma composição overlay válida com fundo preto.
+2. Filtro pan: substituído `on` por `n` nas expressões do filtro crop, variável de frame apropriada para esse filtro.
+3. Diretor de Arte: `image_validator_agent.py` importava `get_media_info`, mas essa função não existia em modules/media_engine.py. Foi adicionada uma implementação via ffprobe, com busca do executável em locais comuns e fallback seguro.
+4. Caminho do FFmpeg: o agent.py procura tanto na raiz do workspace quanto dentro da pasta VideoFactoryAI, e depois consulta o PATH.
+5. A configuração `cfg['ffmpeg_path']` é enviada ao Diretor de Arte para extrair frames com o mesmo FFmpeg do pipeline.
+6. O console Windows substitui caracteres que a codificação atual não suporta, evitando que símbolos como ✓/✗ derrubem a busca de mídia.
+
+INSTALAÇÃO SEGURA
+1. Feche o VideoFactoryAI.
+2. Faça backup dos três arquivos atuais.
+3. Extraia o ZIP na pasta raiz `C:\Fabrica-de-videos\VideoFactoryAI`, preservando a estrutura de pastas.
+   - agent.py deve ficar ao lado do config.yaml.
+   - visual_processor.py e media_engine.py devem ficar em modules\.
+4. Não apague o restante do projeto. Não substitua image_validator_agent.py nem os outros agentes.
+5. Inicie a interface e teste primeiro um roteiro curto.
+
+VERIFICAÇÕES EXECUTADAS
+- Compilação sintática Python dos arquivos alterados: OK.
+- Teste real do FFmpeg com imagens de teste para as quatro direções do efeito slide: OK.
+- Teste real do filtro pan: OK.
+- Teste de get_media_info via ffprobe: OK.
+- Import de image_validator_agent após a correção de media_engine: OK.
+
+LIMITES
+Os testes foram feitos neste ambiente de desenvolvimento, não na instalação Windows do usuário. Portanto, ainda é necessário fazer uma produção curta no Windows antes de usar em um documentário longo. A análise semântica do Diretor de Arte continua dependendo da disponibilidade e configuração do Gemini; sem LLM, pode usar heurísticas menos confiáveis.

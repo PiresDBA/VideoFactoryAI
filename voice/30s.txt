@@ -1,0 +1,11 @@
+Olá. Eh, imagine duas nações que já foram aliadas próximas próximas a ponto de compartilhar acordos tecnológicos e inteligência, mas que hoje parece um passo permanente. Mas o que os Estados Unidos buscam na região hoje? Quais os pilares da política externa americana em relação ao Irã? O primeiro pilar é a segurança dos aliados
+
+
+ffmpeg -i minhavoz.wav -ss 00:00:00 -to 00:00:30 -c copy trecho_30s.wav
+
+
+ffmpeg -i minhavoz.wav -ss 00:00:00 -to 00:00:30 -c copy trecho_28s.wav
+
+
+
+olá, tudo beleza?  você sabia que o sabiá sabia assobiar? Hoje vamos analisar os principais fatores que influenciam a política externa dos Estados Unidos no Oriente Médio.

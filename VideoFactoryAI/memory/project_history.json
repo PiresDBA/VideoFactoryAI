@@ -1,0 +1,291 @@
+[
+  {
+    "data": "2026-10-23T00:10:52.615967",
+    "tema": "a_guerra_fria",
+    "canal": "historia",
+    "duracao_s": 117.4,
+    "duracao_min": 1.96,
+    "num_cenas": 6,
+    "tipos_cenas": {
+      "image": 3,
+      "video": 3
+    },
+    "assets_total": 6,
+    "midia_real": 2,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 1,
+      "L2_image": 1,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "cache": 4
+    },
+    "tempo_pipeline_s": 338.2,
+    "tempo_pipeline_min": 5.64,
+    "output_video": "C:\\Projeto_Ira_EUA\\saida\\historia_final.mp4"
+  },
+  {
+    "data": "2026-10-23T00:27:00.616383",
+    "tema": "a_morte_da_bezerra",
+    "canal": "historia",
+    "duracao_s": 118.3,
+    "duracao_min": 1.97,
+    "num_cenas": 6,
+    "tipos_cenas": {
+      "video": 6
+    },
+    "assets_total": 6,
+    "midia_real": 3,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 3,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "cache": 3
+    },
+    "tempo_pipeline_s": 502.6,
+    "tempo_pipeline_min": 8.38,
+    "output_video": "C:\\Projeto_Ira_EUA\\saida\\historia_final.mp4"
+  },
+  {
+    "data": "2026-10-23T00:48:27.890806",
+    "tema": "joao_e_pe_de_feijao",
+    "canal": "historia",
+    "duracao_s": 119.2,
+    "duracao_min": 1.99,
+    "num_cenas": 7,
+    "tipos_cenas": {
+      "video": 7
+    },
+    "assets_total": 7,
+    "midia_real": 1,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 1,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "cache": 6
+    },
+    "tempo_pipeline_s": 542.0,
+    "tempo_pipeline_min": 9.03,
+    "output_video": "C:\\Projeto_Ira_EUA\\saida\\historia_final.mp4"
+  },
+  {
+    "data": "2026-10-23T01:36:46.433633",
+    "tema": "joao_e_maria_junto_com_o_pe_de_feijao",
+    "canal": "historia",
+    "duracao_s": 296.1,
+    "duracao_min": 4.94,
+    "num_cenas": 19,
+    "tipos_cenas": {
+      "video": 10,
+      "image": 9
+    },
+    "assets_total": 19,
+    "midia_real": 19,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 10,
+      "L2_image": 9,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "cache": 0
+    },
+    "tempo_pipeline_s": 640.1,
+    "tempo_pipeline_min": 10.67,
+    "output_video": "C:\\Projeto_Ira_EUA\\projetos\\joao_e_maria_junto_com_o_pe_de_feijao\\joao_e_maria_junto_com_o_pe_de_feijao.mp4"
+  },
+  {
+    "data": "2026-10-23T10:18:48.273074",
+    "tema": "bezerro_de_ouro",
+    "canal": "historia",
+    "duracao_s": 53.8,
+    "duracao_min": 0.9,
+    "num_cenas": 3,
+    "tipos_cenas": {
+      "video": 2,
+      "image": 1
+    },
+    "assets_total": 3,
+    "midia_real": 3,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 2,
+      "L2_image": 1,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "cache": 0
+    },
+    "tempo_pipeline_s": 184.9,
+    "tempo_pipeline_min": 3.08,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\bezerro_de_ouro\\bezerro_de_ouro.mp4"
+  },
+  {
+    "data": "2026-10-23T10:47:55.061049",
+    "tema": "guerra_das_malvinas",
+    "canal": "historia",
+    "duracao_s": 171.8,
+    "duracao_min": 2.86,
+    "num_cenas": 10,
+    "tipos_cenas": {
+      "video": 6,
+      "image": 4
+    },
+    "assets_total": 10,
+    "midia_real": 10,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 6,
+      "L2_image": 4,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "cache": 0
+    },
+    "tempo_pipeline_s": 452.3,
+    "tempo_pipeline_min": 7.54,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\guerra_das_malvinas\\guerra_das_malvinas.mp4"
+  },
+  {
+    "data": "2026-10-23T12:40:16.924236",
+    "tema": "teste",
+    "canal": "historia",
+    "duracao_s": 60.7,
+    "duracao_min": 1.01,
+    "num_cenas": 3,
+    "tipos_cenas": {
+      "video": 2,
+      "image": 1
+    },
+    "assets_total": 3,
+    "midia_real": 3,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 2,
+      "L2_image": 1,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "cache": 0
+    },
+    "tempo_pipeline_s": 234.5,
+    "tempo_pipeline_min": 3.91,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\teste\\teste.mp4"
+  },
+  {
+    "data": "2026-10-24T18:56:07.162188",
+    "tema": "queda_de_constantinopla",
+    "canal": "historia",
+    "duracao_s": 178.2,
+    "duracao_min": 2.97,
+    "num_cenas": 9,
+    "tipos_cenas": {
+      "video": 5,
+      "image": 4
+    },
+    "assets_total": 9,
+    "midia_real": 9,
+    "midia_ia_gerada": 0,
+    "fontes": {},
+    "tempo_pipeline_s": 520.9,
+    "tempo_pipeline_min": 8.68,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\queda_de_constantinopla\\queda_de_constantinopla.mp4"
+  },
+  {
+    "data": "2026-10-25T20:16:38.793282",
+    "tema": "makete_ho",
+    "canal": "geral",
+    "duracao_s": 689.2,
+    "duracao_min": 11.49,
+    "num_cenas": 46,
+    "tipos_cenas": {
+      "image": 46
+    },
+    "assets_total": 33,
+    "midia_real": 0,
+    "midia_ia_gerada": 1,
+    "fontes": {
+      "L1_video": 0,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 1,
+      "cache": 32
+    },
+    "tempo_pipeline_s": 445.1,
+    "tempo_pipeline_min": 7.42,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\makete_ho\\makete_ho.mp4"
+  },
+  {
+    "data": "2026-10-25T20:47:54.038369",
+    "tema": "makete_ho",
+    "canal": "geral",
+    "duracao_s": 689.2,
+    "duracao_min": 11.49,
+    "num_cenas": 46,
+    "tipos_cenas": {
+      "image": 46
+    },
+    "assets_total": 33,
+    "midia_real": 0,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 0,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "cache": 33
+    },
+    "tempo_pipeline_s": 667.8,
+    "tempo_pipeline_min": 11.13,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\makete_ho\\makete_ho.mp4"
+  },
+  {
+    "data": "2026-10-26T17:02:54.333859",
+    "tema": "makete_ho",
+    "canal": "documentario",
+    "duracao_s": 689.2,
+    "duracao_min": 11.49,
+    "num_cenas": 46,
+    "tipos_cenas": {
+      "image": 46
+    },
+    "assets_total": 35,
+    "midia_real": 0,
+    "midia_ia_gerada": 2,
+    "fontes": {
+      "L1_video": 0,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 2,
+      "cache": 33
+    },
+    "tempo_pipeline_s": 1611.8,
+    "tempo_pipeline_min": 26.86,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\makete_ho\\makete_ho.mp4"
+  },
+  {
+    "data": "2026-10-26T20:27:21.881442",
+    "tema": "makete_ho",
+    "canal": "documentario",
+    "duracao_s": 689.2,
+    "duracao_min": 11.49,
+    "num_cenas": 46,
+    "tipos_cenas": {
+      "image": 46
+    },
+    "assets_total": 0,
+    "midia_real": 0,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 0,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "local_library": 0,
+      "cache": 0
+    },
+    "tempo_pipeline_s": 1478.9,
+    "tempo_pipeline_min": 24.65,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\makete_ho\\makete_ho.mp4"
+  }
+]

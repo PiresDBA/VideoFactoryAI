@@ -1,0 +1,31 @@
+<<
+Atue como um diretor e roteirista de documentários de alto padrão internacional. Seu tom é envolvente, reflexivo, culturalmente rico e cinematográfico. Escreva um roteiro de vídeo para o YouTube sobre o seguinte assunto obrigatório: Como é a vida de quem convive com um bulldigue ingles dentro de casa?
+
+O roteiro deve seguir rigorosamente as diretrizes abaixo:
+
+DURAÇÃO E CONTAGEM DE PALAVRAS: O roteiro deve ter entre 546 e 668 palavras de texto corrido para narração por voz (alvo aproximado de 607 palavras, correspondente a 5 minutos de vídeo).
+
+ESTRUTURA E ESTILO:
+
+Equilibre narrativa humana com fatos verificáveis.
+
+Comece com um gancho sensorial nos primeiros 15 segundos, contendo uma afirmação surpreendente e verdadeira.
+
+Inclua uma promessa clara do que será descoberto até o fim do vídeo.
+
+Insira uma virada narrativa a cada 40 a 60 segundos (fato inesperado, contradição ou pergunta respondida depois).
+
+Crie um mistério aberto no meio do roteiro e resolva-o apenas no final.
+
+Termine com um resumo forte, uma reflexão que conecta passado, presente e futuro, uma pergunta instigante para os comentários e um pedido curto de inscrição.
+
+Utilize somente fatos verificáveis. Quando houver dúvida, utilize expressões como "segundo registros da época" ou omita a informação.
+
+Apresente o roteiro estritamente em texto corrido para narração por voz: sem títulos, sem listas, sem asteriscos, sem emojis e sem marcações de cena.
+
+---METADADOS---
+[3 títulos de até 60 caracteres cada]
+[Descrição do vídeo em 2 parágrafos]
+[10 palavras-chave separadas por vírgula]
+[5 fatos para conferir]
+<<>>

@@ -1,0 +1,133 @@
+--- a/web_image_providers.py
++++ b/web_image_providers.py
+@@ -6,7 +6,7 @@
+ individual do arquivo deve ser verificada na página de origem antes de uso comercial.
+ """
+ from __future__ import annotations
+-import base64, io, os, re, time
++import base64, io, json, os, re, time
+ from pathlib import Path
+ from typing import Optional, Tuple
+ from urllib.parse import quote_plus
+@@ -269,9 +269,78 @@
+         except Exception: pass
+ 
+ 
++def _parece_imagem(data: bytes) -> bool:
++    return bool(data and len(data) >= MIN_BYTES and (
++        data.startswith(b"\xff\xd8") or data.startswith(b"\x89PNG\r\n\x1a\n")
++        or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")))
++
++
++def _ler_no_navegador(page, src: str) -> Optional[bytes]:
++    """Lê a imagem pelo próprio navegador: aceita blob:, data:, URLs assinadas e cookies.
++    O page.request não consegue ler blob:, por isso este método vem antes dele."""
++    try:
++        b64 = page.evaluate("""async (u) => {
++            const r = await fetch(u, {credentials: 'include'});
++            if (!r.ok) return null;
++            const blob = await r.blob();
++            return await new Promise((ok, err) => {
++                const fr = new FileReader();
++                fr.onload = () => ok(fr.result.split(',')[1]);
++                fr.onerror = err;
++                fr.readAsDataURL(blob);
++            });
++        }""", src)
++        if not b64:
++            return None
++        data = base64.b64decode(b64)
++        return data if _parece_imagem(data) else None
++    except Exception:
++        return None
++
++
++def _revelar_controles(page) -> None:
++    """Muitos sites só mostram o botão de download ao passar o mouse sobre a imagem."""
++    try:
++        imgs = page.locator("img")
++        n = imgs.count()
++        if n:
++            imgs.nth(n - 1).hover(timeout=800)
++            page.wait_for_timeout(300)
++    except Exception:
++        pass
++
++
++def _diagnostico(page, provider: str, scene_id: int) -> None:
++    """Em falha, salva screenshot e um JSON com o que o site expôs (imagens, botões, campos)."""
++    try:
++        out = _profiles_root().parent / "logs" / "webimg"
++        out.mkdir(parents=True, exist_ok=True)
++        base = out / f"{provider}_cena{scene_id}_{time.strftime('%Y%m%d_%H%M%S')}"
++        page.screenshot(path=str(base.with_suffix(".png")))
++        info = page.evaluate("""() => ({
++            imgs: [...document.querySelectorAll('img')].slice(-30).map(e => ({
++                src: (e.currentSrc || e.src || '').slice(0, 120),
++                w: e.naturalWidth, h: e.naturalHeight,
++                visivel: e.getClientRects().length > 0})),
++            botoes: [...document.querySelectorAll('button,[role="button"]')]
++                .filter(b => /download|baixar|save|salvar/i.test(
++                    (b.getAttribute('aria-label') || '') + (b.title || '') + b.innerText))
++                .map(b => ({rotulo: (b.getAttribute('aria-label') || b.title || b.innerText || '').slice(0, 60),
++                            visivel: b.getClientRects().length > 0})),
++            campos: [...document.querySelectorAll('textarea,[contenteditable="true"]')].map(e => ({
++                tag: e.tagName, visivel: e.getClientRects().length > 0,
++                dica: (e.placeholder || e.getAttribute('aria-label') || '').slice(0, 60)}))
++        })""")
++        base.with_suffix(".json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
++        print(f"    [diagnóstico] salvo em {out}")
++    except Exception as exc:
++        print(f"    [diagnóstico] falhou: {exc}")
++
++
+ def _extract_image(page, exclude_srcs=None, download_button_start=0) -> Optional[bytes]:
+     # First try an actual download button; do not use screenshots of the browser.
+     exclude_srcs = exclude_srcs or set()
++    _revelar_controles(page)
+     buttons = _download_buttons(page)
+     for b in reversed(buttons[max(0, download_button_start):]):
+         try:
+@@ -295,13 +364,13 @@
+         for i in range(max(0,imgs.count()-50),imgs.count()):
+             try:
+                 m=imgs.nth(i).evaluate("e=>({src:e.currentSrc||e.src||'',w:e.naturalWidth||0,h:e.naturalHeight||0})")
+-                if m['src'] and m['src'] not in exclude_srcs and m['w']>=768 and m['h']>=432 and not m['src'].startswith('blob:'):
++                if m['src'] and m['src'] not in exclude_srcs and m['w']>=768 and m['h']>=432:
+                     candidates.append(m)
+             except Exception: pass
+     except Exception: pass
+     candidates.sort(key=lambda x:x['w']*x['h'],reverse=True)
+     for item in candidates:
+-        data=_download_candidate(page,item['src'])
++        data=_ler_no_navegador(page,item['src']) or _download_candidate(page,item['src'])
+         if data: return data
+     return None
+ 
+@@ -385,7 +454,12 @@
+                      "Do not impose a cinematic style unless it serves the scene.\n"
+                      f"Video topic: {topic or 'unspecified'}\nScene {scene_id}: {prompt}\n"
+                      "Generate the actual image, not a textual description.")
+-        composer.click(timeout=4000); composer.fill(instruction,timeout=7000)
++        composer.click(timeout=4000)
++        page.keyboard.press("ControlOrMeta+A"); page.keyboard.press("Delete")
++        page.keyboard.insert_text(instruction)
++        lido=composer.evaluate("e => ((e.value ?? e.innerText) || '').trim()")
++        if len(lido)<20:
++            raise RuntimeError("o texto não entrou na caixa de prompt (overlay ou campo errado)")
+         sent=False
+         for sel in cfg['send']:
+             try:
+@@ -416,6 +490,12 @@
+         return (cfg['url'],f"ai_generated_{provider}_webchat")
+     except Exception as exc:
+         print(f"    [{provider}] Geração falhou: {exc}")
++        if page is not None:
++            try:
++                if not page.is_closed():
++                    _diagnostico(page, provider, scene_id)
++            except Exception:
++                pass
+         try: Path(dest_path).unlink(missing_ok=True)
+         except Exception: pass
+         return None

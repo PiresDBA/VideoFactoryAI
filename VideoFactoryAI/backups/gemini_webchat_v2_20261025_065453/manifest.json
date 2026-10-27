@@ -1,0 +1,16 @@
+﻿{
+    "created":  "2026-10-25T06:54:53.3655541-03:00",
+    "project_root":  "C:\\Fabrica-de-videos\\VideoFactoryAI",
+    "files":  [
+                  {
+                      "name":  "media_research_agent.py",
+                      "existed":  true,
+                      "backup":  "C:\\Fabrica-de-videos\\VideoFactoryAI\\backups\\gemini_webchat_v2_20261025_065453\\media_research_agent.py"
+                  },
+                  {
+                      "name":  "gemini_webchat_image.py",
+                      "existed":  true,
+                      "backup":  "C:\\Fabrica-de-videos\\VideoFactoryAI\\backups\\gemini_webchat_v2_20261025_065453\\gemini_webchat_image.py"
+                  }
+              ]
+}

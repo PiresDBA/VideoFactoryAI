@@ -1,0 +1,101 @@
+{
+  "imgs": [
+    {
+      "src": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQE",
+      "w": 96,
+      "h": 96,
+      "visivel": true
+    },
+    {
+      "src": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQE",
+      "w": 96,
+      "h": 96,
+      "visivel": true
+    },
+    {
+      "src": "https://ts1.mm.bing.net/th?id=OIP.9qT147rVFAhRpqx6A6hw-gHaEO&pid=15.1",
+      "w": 474,
+      "h": 270,
+      "visivel": true
+    },
+    {
+      "src": "https://ts2.mm.bing.net/th?id=OIP.DhPZkkcTFDlBcYzGn15YxgHaE7&pid=15.1",
+      "w": 474,
+      "h": 315,
+      "visivel": true
+    },
+    {
+      "src": "https://ts3.mm.bing.net/th?id=OIP.ghSdah7F_FOvp5zZODxzuwHaEC&pid=15.1",
+      "w": 474,
+      "h": 258,
+      "visivel": true
+    },
+    {
+      "src": "https://ts1.mm.bing.net/th?id=OIP.9i2RsejwNQKNvt7-TWZBvgHaEJ&pid=15.1",
+      "w": 474,
+      "h": 265,
+      "visivel": true
+    },
+    {
+      "src": "https://services.bingapis.com/favicon?url=dreamstime.com",
+      "w": 128,
+      "h": 128,
+      "visivel": true
+    },
+    {
+      "src": "https://services.bingapis.com/favicon?url=freepik.com",
+      "w": 32,
+      "h": 32,
+      "visivel": true
+    },
+    {
+      "src": "https://services.bingapis.com/favicon?url=steamwroughttimepieces.com",
+      "w": 32,
+      "h": 32,
+      "visivel": true
+    },
+    {
+      "src": "https://ts3.mm.bing.net/th?id=OIP.ghSdah7F_FOvp5zZODxzuwHaEC&pid=15.1",
+      "w": 474,
+      "h": 258,
+      "visivel": true
+    },
+    {
+      "src": "https://ts1.mm.bing.net/th?id=OIP.9qT147rVFAhRpqx6A6hw-gHaEO&pid=15.1",
+      "w": 474,
+      "h": 270,
+      "visivel": true
+    },
+    {
+      "src": "https://ts2.mm.bing.net/th?id=OIP.DhPZkkcTFDlBcYzGn15YxgHaE7&pid=15.1",
+      "w": 474,
+      "h": 315,
+      "visivel": true
+    },
+    {
+      "src": "https://ts3.mm.bing.net/th?id=OIP.ghSdah7F_FOvp5zZODxzuwHaEC&pid=15.1",
+      "w": 474,
+      "h": 258,
+      "visivel": true
+    },
+    {
+      "src": "https://ts1.mm.bing.net/th?id=OIP.9i2RsejwNQKNvt7-TWZBvgHaEJ&pid=15.1",
+      "w": 474,
+      "h": 265,
+      "visivel": true
+    }
+  ],
+  "botoes": [
+    {
+      "rotulo": "Baixar",
+      "visivel": true
+    }
+  ],
+  "campos": [
+    {
+      "tag": "SPAN",
+      "visivel": true,
+      "dica": "Enviar uma mensagem para o Copilot"
+    }
+  ]
+}

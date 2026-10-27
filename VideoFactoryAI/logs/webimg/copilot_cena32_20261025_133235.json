@@ -1,0 +1,89 @@
+{
+  "imgs": [
+    {
+      "src": "https://uhf.microsoft.com/images/microsoft/RE1Mu3b.png",
+      "w": 216,
+      "h": 46,
+      "visivel": true
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/copilot-mobile-logo-static-286643fc8c.png",
+      "w": 0,
+      "h": 0,
+      "visivel": false
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/module-work-1-8198b36e80.png",
+      "w": 1611,
+      "h": 906,
+      "visivel": true
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/module-work-2-5e6655217d.png",
+      "w": 1611,
+      "h": 851,
+      "visivel": true
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/module-work-3-96c6eabf13.png",
+      "w": 806,
+      "h": 453,
+      "visivel": true
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/module-life-1-8198b36e80.png",
+      "w": 1611,
+      "h": 906,
+      "visivel": false
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/module-life-2-7b253f97a5.png",
+      "w": 1611,
+      "h": 851,
+      "visivel": false
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/module-life-3-0c1e820f0e.png",
+      "w": 1611,
+      "h": 850,
+      "visivel": false
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/module-school-1-8198b36e80.png",
+      "w": 1611,
+      "h": 906,
+      "visivel": false
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/module-school-2-1adb05aef7.png",
+      "w": 1611,
+      "h": 851,
+      "visivel": false
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-copilotcom/module-school-3-b720eb377a.png",
+      "w": 1611,
+      "h": 851,
+      "visivel": false
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-mcm/hero-desktop-download-1bb1ff82cb.png",
+      "w": 879,
+      "h": 660,
+      "visivel": true
+    },
+    {
+      "src": "https://res.cdn.office.net/officehub/images/content/images/unauth-ccm/ccm-qr-code-c4d1fcceb0.png",
+      "w": 879,
+      "h": 660,
+      "visivel": true
+    }
+  ],
+  "botoes": [
+    {
+      "rotulo": "02/\nNenhum download ou reinstalação é necessário",
+      "visivel": true
+    }
+  ],
+  "campos": []
+}

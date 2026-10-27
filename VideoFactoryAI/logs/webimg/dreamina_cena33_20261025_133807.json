@@ -1,0 +1,30 @@
+{
+  "imgs": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKEAAAChCAMAAACYjy+EAAADAFBMVEVHcEwIgPgaqPYIgflUz+kVoPUOePwHkvYFkvYaqPQFkv",
+      "w": 161,
+      "h": 161,
+      "visivel": true
+    },
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEIAAABICAMAAAB1EdO8AAAC+lBMVEUAAAAgcaUOW6kkmN5owNlSvt+JxdJuxeBbweP+lTsopO",
+      "w": 66,
+      "h": 72,
+      "visivel": true
+    },
+    {
+      "src": "https://sf16-passport-sg.ibytedtos.com/img/user-avatar-alisg/jhhkpvwiqgisfyb91y74rxirhpbcr5tv~tplv-resize:100:0.image",
+      "w": 100,
+      "h": 100,
+      "visivel": false
+    }
+  ],
+  "botoes": [],
+  "campos": [
+    {
+      "tag": "TEXTAREA",
+      "visivel": true,
+      "dica": "Describe the image you're imagining"
+    }
+  ]
+}

@@ -43,6 +43,16 @@ media:
   gemini_only: false
   prefer_real_media: true
   web_research_before_generation: true
+  media_source_mode: local_only # local_only | local_then_online | webchat_only | internet_images
+  min_local_images: 0 # 0 = uma imagem por cena; maior que 0 reparte imagens em cortes por cena
+  local_media_mode: required   # off | prefer | required (required nunca busca online)
+  local_media_enabled: true
+  local_media_folder: imagens
+  local_similarity_threshold: 0.80
+  local_ollama_model: llava-phi3
+  local_ollama_url: http://127.0.0.1:11434
+  local_ollama_candidate_count: 4
+  local_ollama_timeout_s: 180
   revalidate_images: false
   force_regeneration: false
   reuse_approved_images: true

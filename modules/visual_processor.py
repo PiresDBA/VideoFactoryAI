@@ -4,14 +4,13 @@ Standardizes all video clips and generates professional motion effects on static
 
 Effects available:
 - pan: Smooth horizontal/vertical pan across the image
-- ken_burns_smooth: Subtle zoom with smooth easing (no jitter)
 - slide: Slide transition from one side to another
-- fade_zoom: Subtle zoom with fade in/out
 - static: No motion (just normalized)
 """
 import os
 import random
 import subprocess
+import unicodedata
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -30,7 +29,7 @@ try:
 except ImportError:
     MOVIEPY_AVAILABLE = False
 
-EFFECT_TYPES = ["pan", "ken_burns_smooth", "slide", "fade_zoom", "static"]
+EFFECT_TYPES = ["pan", "slide", "static"]
 DEFAULT_EFFECT = "pan"
 
 
@@ -42,14 +41,14 @@ def get_effect_for_scene(scene: Dict[str, Any], cfg: Dict, scene_idx: int) -> st
         return forced
     
     # Auto mode: cycle through effects for variety
-    effects_cycle = ["pan", "ken_burns_smooth", "slide", "fade_zoom"]
+    effects_cycle = EFFECT_TYPES
     return effects_cycle[scene_idx % len(effects_cycle)]
 
 
 def build_pan_filter(duration: float, fps: int = 30, direction: Optional[str] = None) -> str:
     """
     Build a smooth pan filter using scale + crop with overlay.
-    This is much smoother than zoompan.
+    The pan remains smooth without applying a zoom.
     """
     frames = max(1, int(round(duration * fps)))
     
@@ -61,52 +60,23 @@ def build_pan_filter(duration: float, fps: int = 30, direction: Optional[str] = 
     # Scale to 4K for sub-pixel precision, then crop to 1080p moving across
     # The crop window moves across the 4K image
     if direction == "left_to_right":
-        crop_expr = f"crop=1920:1080:x='min(iw-1920, (iw-1920)*on/{frames})':y=(ih-1080)/2"
+        crop_expr = f"crop=1920:1080:x='min(iw-1920, (iw-1920)*n/{frames})':y=(ih-1080)/2"
     elif direction == "right_to_left":
-        crop_expr = f"crop=1920:1080:x='max(0, (iw-1920)*(1-on/{frames}))':y=(ih-1080)/2"
+        crop_expr = f"crop=1920:1080:x='max(0, (iw-1920)*(1-n/{frames}))':y=(ih-1080)/2"
     elif direction == "top_to_bottom":
-        crop_expr = f"crop=1920:1080:x=(iw-1920)/2:y='min(ih-1080, (ih-1080)*on/{frames})'"
+        crop_expr = f"crop=1920:1080:x=(iw-1920)/2:y='min(ih-1080, (ih-1080)*n/{frames})'"
     elif direction == "bottom_to_top":
-        crop_expr = f"crop=1920:1080:x=(iw-1920)/2:y='max(0, (ih-1080)*(1-on/{frames}))'"
+        crop_expr = f"crop=1920:1080:x=(iw-1920)/2:y='max(0, (ih-1080)*(1-n/{frames}))'"
     elif direction == "diagonal_tl_br":
-        crop_expr = f"crop=1920:1080:x='min(iw-1920, (iw-1920)*on/{frames})':y='min(ih-1080, (ih-1080)*on/{frames})'"
+        crop_expr = f"crop=1920:1080:x='min(iw-1920, (iw-1920)*n/{frames})':y='min(ih-1080, (ih-1080)*n/{frames})'"
     else:  # diagonal_tr_bl
-        crop_expr = f"crop=1920:1080:x='max(0, (iw-1920)*(1-on/{frames}))':y='min(ih-1080, (ih-1080)*on/{frames})'"
+        crop_expr = f"crop=1920:1080:x='max(0, (iw-1920)*(1-n/{frames}))':y='min(ih-1080, (ih-1080)*n/{frames})'"
     
     vf = (
         f"scale=3840:2160:force_original_aspect_ratio=increase,"
         f"crop=3840:2160,"
         f"{crop_expr},"
         f"fps={fps},format=yuv420p"
-    )
-    return vf
-
-
-def build_ken_burns_smooth_filter(duration: float, fps: int = 30, zoom_range: float = 0.08) -> str:
-    """
-    Build a truly smooth Ken Burns effect using scale + crop with easing.
-    No zoompan - uses scale + crop with smooth interpolation.
-    """
-    frames = max(1, int(round(duration * fps)))
-    
-    # Subtle zoom range (e.g., 1.0 to 1.08)
-    # Use smoothstep easing: 3t² - 2t³
-    zoom_expr = f"1.0+{zoom_range}*(3*pow(on/{frames},2)-2*pow(on/{frames},3))"
-    
-    # Randomly choose zoom in or out
-    if random.choice([True, False]):
-        # Zoom in: 1.0 -> 1.08
-        zoom_expr = f"1.0+{zoom_range}*(3*pow(on/{frames},2)-2*pow(on/{frames},3))"
-    else:
-        # Zoom out: 1.08 -> 1.0
-        zoom_expr = f"1.0+{zoom_range}-{zoom_range}*(3*pow(on/{frames},2)-2*pow(on/{frames},3))"
-    
-    vf = (
-        f"scale=3840:2160:force_original_aspect_ratio=increase,"
-        f"crop=3840:2160,"
-        f"zoompan=z='{zoom_expr}':d={frames}:"
-        f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-        f"s=1920x1080:fps=30,format=yuv420p"
     )
     return vf
 
@@ -135,28 +105,6 @@ def build_slide_filter(duration: float, fps: int = 30, direction: Optional[str] 
         f"[1:v][img]overlay=x={x_expr}:y={y_expr}:shortest=1,"
         f"fps={fps},format=yuv420p[out]"
     )
-
-
-def build_fade_zoom_filter(duration: float, fps: int = 30) -> str:
-    """
-    Subtle zoom with fade in/out - very professional looking.
-    """
-    frames = max(1, int(round(duration * fps)))
-    
-    # Fade in at start, subtle zoom, fade out at end
-    fade_in = f"fade=in:0:30"
-    fade_out = f"fade=out:{frames-30}:30"
-    zoom_expr = "1.0+0.04*(3*pow(on/{f},2)-2*pow(on/{f},3))".format(f=frames)
-    
-    vf = (
-        f"scale=1920:1080:force_original_aspect_ratio=decrease,"
-        f"pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,"
-        f"zoompan=z='1.0+0.04*(3*pow(on/{frames},2)-2*pow(on/{frames},3))':d={frames}:"
-        f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-        f"s=1920x1080:fps=30,"
-        f"{fade_in},{fade_out},format=yuv420p"
-    )
-    return vf
 
 
 def process_single_scene(
@@ -204,10 +152,6 @@ def process_single_scene(
             ]
         elif effect == "pan":
             vf_filter = build_pan_filter(duration)
-        elif effect == "ken_burns_smooth":
-            vf_filter = build_ken_burns_smooth_filter(duration)
-        elif effect == "fade_zoom":
-            vf_filter = build_fade_zoom_filter(duration)
         else:  # static
             vf_filter = (
                 f"scale=1920:1080:force_original_aspect_ratio=decrease,"
@@ -302,17 +246,10 @@ def process_single_scene_opencv(
                 # Pan across the image
                 x = int((3840 - target_w) * eased)
                 y = int((2160 - target_h) * 0.5)
-            elif effect == "ken_burns_smooth":
-                zoom = 1.0 + 0.08 * (3 * t * t - 2 * t * t * t)
-                new_w = int(target_w / zoom)
-                new_h = int(target_h / zoom)
-                x = int((3840 - new_w) * 0.5)
-                y = int((2160 - new_h) * 0.5)
-                crop = frame_4k[y:y+new_h, x:x+new_w]
-                frame_out = cv2.resize(crop, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
-                out.write(frame_out)
-                continue
-            
+            else:
+                x = (3840 - target_w) // 2
+                y = (2160 - target_h) // 2
+
             crop = frame_4k[y:y+target_h, x:x+target_w]
             out.write(crop)
         
@@ -325,40 +262,202 @@ def process_single_scene_opencv(
         return False
 
 
+def _create_missing_scene_card(scene: Dict[str, Any], output_path: str) -> None:
+    """Create an explicit visual placeholder so a missing asset cannot shorten the timeline."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGB", (1920, 1080), (24, 34, 52))
+    draw = ImageDraw.Draw(image)
+    font_path = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "arial.ttf"
+    using_default_font = False
+    try:
+        heading_font = ImageFont.truetype(str(font_path), 58)
+        body_font = ImageFont.truetype(str(font_path), 38)
+    except OSError:
+        heading_font = body_font = ImageFont.load_default()
+        using_default_font = True
+
+    heading = f"SCENE {int(scene['id']):02d} - MEDIA UNAVAILABLE"
+    description = str(
+        scene.get("texto") or scene.get("descricao") or scene.get("query") or ""
+    ).strip()
+    if not description:
+        description = "No visual asset was available for this scene."
+    if using_default_font:
+        heading = unicodedata.normalize("NFKD", heading).encode("ascii", "ignore").decode("ascii")
+        description = unicodedata.normalize(
+            "NFKD", description
+        ).encode("ascii", "ignore").decode("ascii")
+
+    draw.rectangle((100, 300, 1820, 305), fill=(74, 144, 226))
+    draw.text((100, 355), heading, fill=(245, 247, 250), font=heading_font)
+
+    lines = []
+    current = ""
+    for word in description.split():
+        candidate = f"{current} {word}".strip()
+        if current and draw.textbbox((0, 0), candidate, font=body_font)[2] > 1700:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    for index, line in enumerate(lines[:8]):
+        draw.text((100, 470 + index * 62), line, fill=(210, 218, 230), font=body_font)
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path, "JPEG", quality=90)
+
+
 def process_all_scenes(
     scenes: List[Dict[str, Any]],
     asset_map: Dict[int, str],
     temp_clips_dir: str,
     ffmpeg_path: str,
-    cfg: Dict
+    cfg: Dict,
+    asset_sequences: Dict[int, List[str]] | None = None,
 ) -> List[str]:
-    """Process and normalize all scenes sequentially into standardized clips."""
+    """Process scenes; optional asset sequences cut multiple images into one scene."""
     os.makedirs(temp_clips_dir, exist_ok=True)
     processed_clips = []
+    asset_sequences = asset_sequences or {}
     
     total = len(scenes)
     for idx, s in enumerate(scenes, 1):
         scene_id = s["id"]
+        out_path = os.path.join(temp_clips_dir, f"clip_{scene_id:02d}.mp4")
+        scene_assets = [
+            str(path) for path in asset_sequences.get(scene_id, [])
+        ]
+        if (
+            len(scene_assets) <= 1
+            and os.path.exists(out_path)
+            and os.path.getsize(out_path) > 50000
+        ):
+            print(f"  [{idx:02d}/{total:02d}] Scene {scene_id:02d} cached ({s['duration']:.2f}s). Skipping...")
+            processed_clips.append(out_path)
+            continue
+
         source_asset = asset_map.get(scene_id)
+        if len(scene_assets) > 1:
+            missing_assets = [path for path in scene_assets if not os.path.isfile(path)]
+            if missing_assets:
+                raise RuntimeError(
+                    f"Scene {scene_id} has missing images in its local sequence: "
+                    + ", ".join(missing_assets)
+                )
+
+            segment_duration = float(s["duration"]) / len(scene_assets)
+            segment_clips = []
+            elapsed = 0.0
+            for part_index, image_path in enumerate(scene_assets, 1):
+                duration = (
+                    float(s["duration"]) - elapsed
+                    if part_index == len(scene_assets)
+                    else segment_duration
+                )
+                elapsed += duration
+                segment_scene = dict(
+                    s,
+                    tipo="image",
+                    arquivo=os.path.basename(image_path),
+                    duration=duration,
+                )
+                segment_path = os.path.join(
+                    temp_clips_dir,
+                    f"clip_{scene_id:02d}_image_{part_index:03d}.mp4",
+                )
+                if os.path.exists(segment_path):
+                    os.remove(segment_path)
+                if not process_single_scene(
+                    segment_scene,
+                    image_path,
+                    segment_path,
+                    ffmpeg_path,
+                    cfg,
+                    idx + part_index - 1,
+                ):
+                    raise RuntimeError(
+                        f"Failed to process local image {image_path} "
+                        f"for scene {scene_id}"
+                    )
+                segment_clips.append(segment_path)
+
+            manifest_path = os.path.join(
+                temp_clips_dir, f"clip_{scene_id:02d}_images.txt"
+            )
+            with open(manifest_path, "w", encoding="utf-8", newline="\n") as manifest:
+                for segment_path in segment_clips:
+                    safe_path = (
+                        os.path.abspath(segment_path)
+                        .replace("\\", "/")
+                        .replace("'", "'\\''")
+                    )
+                    manifest.write(f"file '{safe_path}'\n")
+            result = subprocess.run(
+                [
+                    ffmpeg_path,
+                    "-y",
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    manifest_path,
+                    "-c",
+                    "copy",
+                    out_path,
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=300,
+            )
+            if result.returncode != 0 or not os.path.isfile(out_path):
+                raise RuntimeError(
+                    f"Failed to concatenate local image sequence for scene "
+                    f"{scene_id}: {result.stderr[-500:]}"
+                )
+            try:
+                os.remove(manifest_path)
+            except OSError as exc:
+                print(f"  [WARN] Could not remove temporary manifest {manifest_path}: {exc}")
+            processed_clips.append(out_path)
+            continue
+
         scene_to_process = s
+        fallback_used = False
         if not source_asset or not os.path.exists(source_asset):
             fallback = cfg.get("fallback_image")
             if fallback and os.path.isfile(fallback):
                 print(f"  [WARN] Scene {scene_id} asset missing; using fallback image.")
                 source_asset = fallback
                 scene_to_process = dict(s, tipo="image", arquivo=os.path.basename(fallback))
+                fallback_used = True
             else:
-                print(f"  [WARN] Scene {scene_id} has no media; skipping.")
-                continue
+                source_asset = os.path.join(
+                    temp_clips_dir, f"fallback_scene_{scene_id:02d}.jpg"
+                )
+                scene_to_process = dict(s, tipo="image")
+                fallback_used = True
         
-        out_filename = f"clip_{scene_id:02d}.mp4"
+        fallback_suffix = "_fallback" if fallback_used else ""
+        out_filename = f"clip_{scene_id:02d}{fallback_suffix}.mp4"
         out_path = os.path.join(temp_clips_dir, out_filename)
         
-        # Check cache
+        # Cache generated fallbacks separately from regular scene clips.
         if os.path.exists(out_path) and os.path.getsize(out_path) > 50000:
             print(f"  [{idx:02d}/{total:02d}] Scene {scene_id:02d} cached ({s['duration']:.2f}s). Skipping...")
             processed_clips.append(out_path)
             continue
+
+        if fallback_used and not (cfg.get("fallback_image") and os.path.isfile(source_asset)):
+            _create_missing_scene_card(s, source_asset)
+            print(
+                f"  [WARN] Scene {scene_id:02d} has no media; using a fallback card "
+                "to preserve scene duration."
+            )
             
         effect = get_effect_for_scene(scene_to_process, cfg, idx) if scene_to_process["tipo"] == "image" else "none"
         print(

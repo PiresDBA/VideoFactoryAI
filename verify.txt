@@ -1,0 +1,33 @@
+1848:     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1849:     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1850:     # PASSO 3/10 — Transcrição e Geração de Legendas (Whisper) — OPCIONAL
+1851:     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1852:     want_subs = getattr(args, "subtitles", False) and not getattr(args, "no_subtitles", False)
+1853:     srt_blocks = []
+1854:     if want_subs:
+1855:         print("[3/10] Geração de legendas (Whisper)...")
+1856:         srt_blocks = generate_subtitles(audio_path, srt_path, cfg, script_text=script_text)
+1857:         scenes     = resync_scenes(scenes, srt_blocks, audio_dur)
+1858:         log(f"  Timecodes ressincronizados com precisão para {len(scenes)} cenas.")
+1859:         if not args.no_checkpoint:
+1860:             state["scenes"]     = scenes
+1861:             state["srt_path"]   = srt_path
+1862:             state["srt_blocks"] = srt_blocks
+1863:             save_checkpoint(state, checkpoint)
+1864:         print("  [OK]
+1865: ")
+1866:     else:
+1867:         print("[3/10] Legendas desativadas (padrão) — pulando Whisper.")
+1868:         # Sem legendas: usa duração do áudio para distribuir cenas uniformemente
+1869:         total_dur = audio_dur
+1870:         n = len(scenes)
+1871:         if n > 0:
+1872:             per = total_dur / n
+1873:             for i, sc in enumerate(scenes):
+1874:                 st = round(i * per, 3)
+1875:                 et = round((i + 1) * per, 3) if i < n - 1 else round(total_dur, 3)
+1876:                 sc["start"] = st
+1877:                 sc["end"] = et
+1878:                 sc["duration"] = round(max(et - st, 1.0), 3)
+1879:         if not args.no_checkpoint:
+1880:             state["scenes"] = scenes

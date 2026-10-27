@@ -1,0 +1,28 @@
+VideoFactoryAI — patch de integração FFmpeg/FFprobe
+
+ESCOPO
+- Corrige media_research_agent.py para respeitar cfg['ffmpeg_path'] e cfg['ffprobe_path'] definidos pelo agent.py.
+- Evita procurar os executáveis dentro de projetos/<slug>/ffmpeg, pois esse diretório é o workspace de cada produção.
+- Usa os caminhos configurados para o avaliador de imagens, consulta de duração e extração de trechos locais autorizados.
+- Não modifica agent.py, XTTS, voz, legendas, renderização ou outros componentes.
+
+INSTALAÇÃO SEGURA
+1. Faça uma cópia de segurança geral do projeto (recomendado).
+2. Extraia o ZIP em uma pasta temporária.
+3. Abra o PowerShell em C:\Fabrica-de-videos\VideoFactoryAI.
+4. Execute o script pelo caminho onde extraiu o ZIP, por exemplo:
+   & 'C:\caminho\extraido\instalar_patch.ps1'
+   O script cria automaticamente um backup timestamped antes de substituir o arquivo.
+5. Faça primeiro um teste curto com um vídeo/arquivo local autorizado, antes de uma produção completa.
+
+REVERSÃO
+Com o PowerShell aberto em C:\Fabrica-de-videos\VideoFactoryAI, execute:
+   & 'C:\caminho\extraido\reverter_patch.ps1'
+O script restaura o backup mais recente criado por este patch.
+
+VALIDAÇÃO FEITA AO PREPARAR O ZIP
+- Sintaxe Python compilada com py_compile.
+- Conferido que o arquivo usa os caminhos configurados para FFmpeg e FFprobe nos três pontos alterados.
+
+LIMITAÇÃO
+Este patch não substitui uma execução real do pipeline no computador do usuário. Ele não inclui image_evaluator_agent.py porque esse arquivo não estava disponível entre os arquivos recuperáveis nesta sessão; o avaliador continua recebendo o caminho correto do FFmpeg por meio de create_evaluator(...).

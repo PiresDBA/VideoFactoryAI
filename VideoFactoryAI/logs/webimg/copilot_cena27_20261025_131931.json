@@ -1,0 +1,11 @@
+{
+  "imgs": [],
+  "botoes": [],
+  "campos": [
+    {
+      "tag": "SPAN",
+      "visivel": true,
+      "dica": "Enviar uma mensagem para o Copilot"
+    }
+  ]
+}

@@ -307,6 +307,8 @@ def get_config(config_path: Path, overrides: dict) -> dict:
         "media": {
             "pixabay_api_key": "",
             "ai_image_provider": "pollinations",
+            "media_source_mode": "local_only",
+            "min_local_images": 0,
             "gemini_only": False,
             "prefer_real_media": True,
             "web_research_before_generation": True,
@@ -1616,7 +1618,11 @@ def generate_voice(text: str, out_path: str, cfg: dict) -> str:
     if (
         pipeline_cfg.get("resume_mode", False)
         and pipeline_cfg.get("reuse_existing_audio", True)
-        and narration_cache_matches(out_path, text)
+        and narration_cache_matches(
+            out_path,
+            text,
+            tts_settings=cfg["tts"],
+        )
     ):
         log("  [TTS] Roteiro inalterado; reutilizando narração existente.")
         return out_path
@@ -1679,7 +1685,7 @@ def generate_voice(text: str, out_path: str, cfg: dict) -> str:
     # Validação de integridade do arquivo de áudio gerado
     if not os.path.exists(out_path) or os.path.getsize(out_path) < 1000:
         raise RuntimeError(f"Erro no TTS: arquivo de áudio inválido em {out_path}")
-    save_narration_hash(out_path, text)
+    save_narration_hash(out_path, text, cfg["tts"])
 
     size_kb = os.path.getsize(out_path) / 1024
     log(f"  [TTS] Narração concluída: {Path(out_path).name} ({size_kb:.0f} KB)")
@@ -2340,8 +2346,58 @@ def get_audio_duration_simple(ffmpeg: str, audio: str) -> float:
 # PARSER DE LINHA DE COMANDO (ARGPARSE)
 # =============================================================================
 
+LOCAL_MEDIA_REVIEW_MARKER = "__LOCAL_MEDIA_REVIEW__"
+
+
+def _request_local_media_review(scene: dict, candidate: dict) -> bool:
+    """Request a manual decision over stdin; the desktop GUI renders the image."""
+    review = {
+        "scene_id": scene.get("id"),
+        "scene_text": str(
+            scene.get("texto") or scene.get("descricao") or ""
+        ),
+        "image_path": str(candidate["path"]),
+        "image_title": str(candidate.get("title") or Path(candidate["path"]).name),
+        "score": float(candidate["score"]),
+    }
+    if os.environ.get("VF_LOCAL_MEDIA_REVIEW_GUI") == "1":
+        print(
+            LOCAL_MEDIA_REVIEW_MARKER + json.dumps(review),
+            flush=True,
+        )
+    else:
+        print(
+            f"\n[REVISÃO LOCAL] Cena {review['scene_id']}: "
+            f"{review['image_title']} (score={review['score']:.3f})\n"
+            f"Imagem: {review['image_path']}\n"
+            f"Trecho: {review['scene_text']}\n"
+            "Digite 'aprovar' ou 'rejeitar': ",
+            end="",
+            flush=True,
+        )
+    answer = sys.stdin.readline().strip().casefold()
+    if answer in {"approve", "aprovar", "a", "yes", "y"}:
+        return True
+    if answer in {"reject", "rejeitar", "r", "no", "n"}:
+        return False
+    if not answer:
+        raise RuntimeError("A revisão manual de mídia local foi encerrada sem resposta.")
+    raise RuntimeError(
+        "Resposta inválida na revisão local; use 'aprovar' ou 'rejeitar'."
+    )
+
+
 def parse_args():
     """Define todos os parâmetros e opções que o usuário pode informar no terminal."""
+    def non_negative_int(value):
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError("informe um número inteiro") from exc
+        if parsed < 0:
+            raise argparse.ArgumentTypeError("o valor não pode ser negativo")
+        return parsed
+
     p = argparse.ArgumentParser(
         prog="VideoFactoryAI",
         description="Transforma um roteiro ou tema em documentário 1080p completo."
@@ -2373,14 +2429,20 @@ def parse_args():
                    help="Voz Edge-TTS (ex: pt-BR-AntonioNeural, pt-BR-FranciscaNeural)")
     p.add_argument("--tts-engine",
                    choices=["edge-tts", "xtts", "f5-tts", "openai"],
-                   default=None,
-                   help="Motor de narração (padrão: edge-tts). Use 'xtts' para clonar sua voz.")
+                   default="xtts",
+                   help="Motor de narração (padrão: XTTS - voz clonada). Use 'edge-tts' para voz neural da Microsoft.")
 
     # Ajustes do Modelo Whisper
     p.add_argument("--whisper-model",
                    choices=["tiny", "base", "small", "medium", "large"],
                    default=None,
                    help="Tamanho do modelo Whisper (padrão: base)")
+    p.add_argument(
+        "--skip-ollama",
+        action="store_true",
+        default=False,
+        help="Pula a triagem do Ollama e abre direto a seleção manual de fotos",
+    )
 
     # As legendas podem ser desativadas, incluídas no render ou geradas
     # separadamente usando uma narração já existente.
@@ -2397,6 +2459,11 @@ def parse_args():
                                  action="store_true",
                                  default=False,
                                  help="Gera somente o SRT PT-BR da narração existente; não executa o pipeline de vídeo")
+    p.add_argument(
+        "--audio-only",
+        action="store_true",
+        help="Gera somente a narração MP3; não planeja cenas, busca mídia nem renderiza vídeo/legendas",
+    )
 
     # Diretor de Arte: validação cruzada de mídia, cena e timing.
     # standard preserva o fluxo atual; strict bloqueia o render se houver falhas críticas.
@@ -2464,6 +2531,32 @@ def parse_args():
     p.add_argument("--no-checkpoint",
                    action="store_true",
                    help="Desativa o salvamento de checkpoint intermediário")
+    p.add_argument(
+        "--review-local-media",
+        action="store_true",
+        default=False,
+        help="Abre revisão manual para candidatos locais abaixo do limiar Ollama",
+    )
+    p.add_argument(
+        "--media-source-mode",
+        choices=["local_only", "local_then_online", "webchat_only", "internet_images"],
+        default=None,
+        help=(
+            "Origem da mídia: somente local, local antes de internet/WebChat, "
+            "somente WebChat ou somente imagens de bancos da internet"
+        ),
+    )
+    p.add_argument(
+        "--local-media-folder",
+        default=None,
+        help="Pasta da biblioteca local de imagens",
+    )
+    p.add_argument(
+        "--min-local-images",
+        type=non_negative_int,
+        default=None,
+        help="Quantidade mínima de imagens locais únicas a distribuir pelo vídeo",
+    )
 
     # Identidade do Canal (--channel ou --canal)
     p.add_argument("--canal", "--channel",
@@ -2529,6 +2622,17 @@ def parse_args():
     args = p.parse_args()
     if args.subtitles_only and (not args.roteiro or args.topic):
         p.error("--subtitles-only exige o caminho do roteiro original e não aceita --topic.")
+    if args.audio_only and args.subtitles_only:
+        p.error("--audio-only e --subtitles-only são modos incompatíveis.")
+    # Se o argumento foi passado via linha de comando, atualizamos o dicionário global/config
+    if hasattr(args, 'skip_ollama') and args.skip_ollama:
+        if 'media' in globals() and isinstance(media, dict):
+            media.setdefault('skip_ollama', True)
+        # Ou se o objeto de configuração estiver acessível:
+        try:
+            cfg.setdefault('media', {})['skip_ollama'] = True
+        except NameError:
+            pass   
     if args.youtube_mode in ("authorized", "both"):
         if not args.youtube_authorized_file:
             p.error("--youtube-mode authorized/both exige --youtube-authorized-file com um arquivo LOCAL.")
@@ -2580,15 +2684,67 @@ def main():
         # Verifica se deve usar WebChat (múltiplos LLMs via navegador)
         modo_escrita = os.getenv("VF_MODO_ESCRITA", "").strip().lower()
         print(f"  [Escrita] modo={modo_escrita or 'procedural'} | webchat_writer={'ok' if _WRITER_AVAILABLE else 'NÃO CARREGOU'}")
-        if modo_escrita in ("webchat", "cadeia") and not _WRITER_AVAILABLE:
-            print("  [ERRO] Modo webchat/cadeia pedido, mas o webchat_writer não carregou. Verifique as dependências.")
+        if modo_escrita in ("webchat", "cadeia", "gem") and not _WRITER_AVAILABLE:
+            print("  [ERRO] Modo webchat/cadeia/gem pedido, mas o webchat_writer não carregou. Verifique as dependências.")
         usar_webchat = (
-            modo_escrita in ("webchat", "cadeia")
+            modo_escrita in ("webchat", "cadeia", "gem")
             and _WRITER_AVAILABLE
             and not reuse_topic_script
         )
 
-        if usar_webchat:
+        if usar_webchat and modo_escrita == "gem":
+            # === MODO GEM @roteiroparavideos ===
+            # Usa o Gem personalizado do Gemini para gerar roteiro + cenas + narração
+            try:
+                from webchat_writer import escrever_via_webchat_gem
+                target_words = int(args.duration * 135)  # ~135 palavras por minuto
+                min_words_target = args.min_words or int(target_words * 0.85)
+                
+                log(f"  [Gem Mode] Ativo — usando @roteiroparavideos no Gemini")
+                log(f"  [Gem Mode] Meta: ~{target_words} palavras | Duração: {args.duration:.0f} min")
+                
+                gem_dados = escrever_via_webchat_gem(
+                    topic=args.topic,
+                    duration_min=args.duration,
+                    target_words=target_words,
+                    roteiros_dir=ROOT_DIR / "roteiros",
+                    slug=slug_topic,
+                    log=log,
+                    min_words=min_words_target
+                )
+                
+                # Salva narração como roteiro principal
+                script_text = gem_dados["narracao_completa"]
+                roteiro_path.write_text(script_text, encoding="utf-8")
+                log(f"  [Gem] Narração salva em: {roteiro_path.relative_to(ROOT_DIR)}")
+                
+                # Salva dados extras do Gem (cenas, título, etc.)
+                gem_extras_path = ROOT_DIR / "roteiros" / f"{slug_topic}_gem_extras.json"
+                import json as _json
+                gem_extras = {
+                    "titulo": gem_dados["titulo"],
+                    "cenas": gem_dados["cenas"],
+                    "duracao_total_min": gem_dados["duracao_total_min"],
+                    "total_cenas": gem_dados["total_cenas"],
+                    "site": gem_dados["site"],
+                }
+                gem_extras_path.write_text(_json.dumps(gem_extras, ensure_ascii=False, indent=2), encoding="utf-8")
+                log(f"  [Gem] Extras (cenas/título) salvos em: {gem_extras_path.name}")
+                log(f"  [Gem] ✓ {gem_dados['total_cenas']} cenas | {gem_dados['duracao_total_min']:.1f} min | Título: {gem_dados['titulo'][:60]}")
+                
+            except Exception as e:
+                if os.getenv("VF_WEBCHAT_PERMITIR_FALLBACK", "0").strip() == "1":
+                    log(f"  [WARN] Gem falhou ({e}) — fallback local habilitado por VF_WEBCHAT_PERMITIR_FALLBACK=1.", warn=True)
+                    usar_webchat = False
+                else:
+                    raise RuntimeError(
+                        f"Gem falhou: {e}\n"
+                        f"VF_MODO_ESCRITA=gem é EXCLUSIVO — não há fallback local automático.\n"
+                        "Verifique se o Gemini está acessível ou defina "
+                        "VF_WEBCHAT_PERMITIR_FALLBACK=1 para permitir o fallback procedural."
+                    ) from e
+
+        elif usar_webchat:
             # Usa webchat_writer com Gemini, Copilot, ChatGPT, DeepSeek, etc.
             try:
                 from webchat_writer import escrever_via_webchat, pesquisar_fontes_web
@@ -2748,11 +2904,11 @@ def main():
     _VERBOSE = cfg["agent"].get("verbose", True)
 
     # Recupera preferências salvas de voz da memória persistente
-    if _VOICE_MEM_AVAILABLE:
+    vmem = None
+    if _VOICE_MEM_AVAILABLE and not args.subtitles_only:
         try:
             vmem = _VMEM(AGENT_DIR / "memory")
             cfg = vmem.apply_to_cfg(cfg, cli_voice=args.voice, cli_engine=args.tts_engine)
-            log(f"  [VoiceMemory] Preferências recuperadas: {vmem.log_summary()}")
         except Exception as e:
             log(f"  [VoiceMemory] Falha ao recuperar preferências: {e}", warn=True)
 
@@ -2782,6 +2938,13 @@ def main():
     else:
         canal_name = "documentario"
 
+    # O perfil do canal fornece preferências padrão, mas não pode substituir
+    # uma voz explicitamente escolhida na GUI/CLI.
+    if args.voice:
+        cfg.setdefault("tts", {})["voice"] = args.voice
+    if vmem is not None:
+        log(f"  [VoiceMemory] Configurações ativas: {vmem.log_summary(cfg)}")
+
     # Aplica chaves de API externas se informadas na linha de comando
     if getattr(args, "pexels_key", None):
         cfg.setdefault("media", {})["pexels_api_key"] = args.pexels_key
@@ -2790,6 +2953,12 @@ def main():
 
     # Opções do YouTube são por execução e não sobrescrevem arquivos de configuração.
     media_cfg = cfg.setdefault("media", {})
+    if args.media_source_mode is not None:
+        media_cfg["media_source_mode"] = args.media_source_mode
+    if args.local_media_folder is not None:
+        media_cfg["local_media_folder"] = args.local_media_folder
+    if args.min_local_images is not None:
+        media_cfg["min_local_images"] = args.min_local_images
     media_cfg["youtube_mode"] = args.youtube_mode
     media_cfg["youtube_authorized_file"] = (
         str(Path(args.youtube_authorized_file).expanduser().resolve())
@@ -2815,6 +2984,9 @@ def main():
                 project_slug = slugify(first_line)
     # Para o planejamento de cenas, usa o topic se fornecido, senão deriva do slug do projeto
     topic_for_planning = topic_active or project_slug
+    # Scripts existentes também precisam de um slug para localizar metadados
+    # de cenas do Gem; nesse fluxo slug_topic não é definido pelo escritor.
+    slug_topic = project_slug
 
     project_dir   = ROOT_DIR / "projetos" / project_slug
     videos_dir    = project_dir / "videos"
@@ -2836,6 +3008,30 @@ def main():
         except FileNotFoundError as exc:
             print(f"[ERRO] {exc}", file=sys.stderr)
             sys.exit(1)
+        return
+    if args.audio_only:
+        project_dir.mkdir(parents=True, exist_ok=True)
+        opening = YOUTUBE_OPENING_SLOGAN.strip()
+        closing = YOUTUBE_CLOSING_PHRASE.strip()
+        if opening.lower() not in script_text.lower():
+            script_text = f"{opening} {script_text}"
+        if closing.lower() not in script_text.lower():
+            script_text = f"{script_text} {closing}"
+        print("[Narração] Modo isolado: gerando somente o arquivo MP3, sem legendas ou vídeo.")
+        audio_path = generate_voice(script_text, audio_path, cfg)
+        if _VOICE_MEM_AVAILABLE:
+            try:
+                vmem = _VMEM(AGENT_DIR / "memory")
+                vmem.save(
+                    voice=cfg["tts"]["voice"],
+                    rate=cfg["tts"].get("rate", "+0%"),
+                    pitch=cfg["tts"].get("pitch", "+0Hz"),
+                    engine=cfg["tts"].get("engine", "edge-tts"),
+                )
+                log("  [VoiceMemory] Configurações de voz salvas na memória.")
+            except Exception as e:
+                log(f"  [VoiceMemory] Falha ao persistir preferências: {e}", warn=True)
+        print(f"[Narração] Arquivo pronto: {audio_path}")
         return
     # Cria as pastas de produção somente no fluxo completo.
     for d in [project_dir, videos_dir, imagens_dir, Path(temp_clips), ckpts_dir, thumbs_dir, metadados_dir, saida_dir]:
@@ -2894,7 +3090,65 @@ def main():
         scenes = state["scenes"]
         log(f"  Cenas carregadas do checkpoint: {len(scenes)} cenas")
     else:
-        scenes = plan_scenes(script_text, cfg, topic=topic_for_planning, canal=canal_name)
+        # Verifica se o Gem já definiu as cenas (modo VF_MODO_ESCRITA=gem)
+        gem_extras_path = ROOT_DIR / "roteiros" / f"{slug_topic}_gem_extras.json"
+        gem_dados_path = ROOT_DIR / "roteiros" / f"{slug_topic}_gem_dados.json"
+        
+        if gem_extras_path.exists() and gem_dados_path.exists():
+            # Usa as cenas definidas pelo Gem @roteiroparavideos
+            try:
+                import json as _json
+                gem_extras = _json.loads(gem_extras_path.read_text(encoding="utf-8"))
+                gem_dados = _json.loads(gem_dados_path.read_text(encoding="utf-8"))
+                
+                cenas_gem = gem_dados.get("cenas", [])
+                if cenas_gem:
+                    log(f"  [Gem] Usando {len(cenas_gem)} cenas definidas pelo @roteiroparavideos")
+                    
+                    # Converte cenas do Gem para formato do pipeline
+                    scenes = []
+                    words_per_s = 2.3
+                    used_queries = set()
+                    
+                    for i, cena in enumerate(cenas_gem):
+                        scene_id = i + 1
+                        texto = cena.get("texto", "")
+                        duracao = cena.get("duracao", 12.0)
+                        query = cena.get("query", f"{topic_for_planning} {cena.get('titulo_cena', '')}")
+                        ai_prompt = cena.get("ai_prompt", cena.get("visual", topic_for_planning))
+                        
+                        # Garante query única
+                        if query in used_queries:
+                            query = f"{query} {scene_id}"
+                        used_queries.add(query)
+                        
+                        scenes.append({
+                            "id": scene_id,
+                            "tipo": "imagem",  # Default, o media_research_agent decide
+                            "arquivo": f"cena_{scene_id:02d}.jpg",
+                            "query": query[:200],
+                            "wikimedia_q": "",
+                            "ai_prompt": ai_prompt[:500],
+                            "needs_ai": False,
+                            "descricao": texto[:80],
+                            "texto": texto,
+                            "start": 0.0,
+                            "end": 0.0,
+                            "duration": max(round(duracao, 2), 5.0),
+                            "titulo_cena": cena.get("titulo_cena", ""),
+                            "timestamp": cena.get("timestamp", ""),
+                        })
+                    
+                    log(f"  [Gem] {len(scenes)} cenas carregadas do Gem")
+                    log(f"  [Gem] Título: {gem_extras.get('titulo', 'N/A')}")
+                    log(f"  [Gem] Duração total: {gem_extras.get('duracao_total_min', 0):.1f} min")
+                    
+            except Exception as e:
+                log(f"  [WARN] Falha ao carregar cenas do Gem: {e}. Usando plan_scenes normal.", warn=True)
+                scenes = plan_scenes(script_text, cfg, topic=topic_for_planning, canal=canal_name)
+        else:
+            scenes = plan_scenes(script_text, cfg, topic=topic_for_planning, canal=canal_name)
+        
         log(f"  {len(scenes)} cenas planejadas "
             f"({sum(1 for s in scenes if s['tipo']=='video')} vídeo | "
             f"{sum(1 for s in scenes if s['tipo']=='image')} imagem)")
@@ -3010,25 +3264,45 @@ def main():
         print("  [OK]\n")
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # PASSO 4/10 — Busca de Mídia com Compliance (L1 a L4)
+    # PASSO 4/10 — Busca de Mídia com Compliance (L0 a L4)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    print("[4/10] Busca de mídia (Hierarquia L1 vídeo -> L2 imagem -> L3 IA pública -> L4 IA gerada)...")
+    print("[4/10] Busca de mídia (L0 biblioteca local -> L1 vídeo -> L2 imagem -> L3 IA pública -> L4 IA gerada)...")
     compliance = None
+    local_asset_sequences = {}
     if _MRA_AVAILABLE:
         try:
             mra = _MRA(cfg, project_dir, AGENT_DIR / "memory", cache_dir=ROOT_DIR / "cache")
+            if getattr(args, "review_local_media", False):
+                mra.local_media_review_callback = _request_local_media_review
             # Passa o tópico para o avaliador de imagens
             topic_for_eval = args.topic if getattr(args, "topic", None) else (
                 Path(roteiro_path).stem.replace("_", " ") if 'roteiro_path' in locals() else "documentario"
             )
             asset_map = mra.source_all(scenes, topic=topic_for_eval)
+            local_asset_sequences = getattr(mra, "local_assets_by_scene", {})
             compliance = mra.compliance_summary()
             log(f"  {compliance['compliant']}/{compliance['total_assets']} mídias verificadas contra direitos autorais.")
             log(f"  Distribuição por nível: {compliance.get('by_level', {})}")
         except Exception as e:
+            media_cfg = cfg.get("media") or {}
+            source_mode = str(media_cfg.get("media_source_mode", "")).strip().lower()
+            local_only = str(media_cfg.get("local_media_mode", "prefer")).lower() == "required"
+            if source_mode or local_only:
+                raise RuntimeError(
+                    f"Modo de origem de mídia '{source_mode or 'local_only'}' ativo; "
+                    f"fallback legado bloqueado após falha no MediaResearchAgent: {e}"
+                ) from e
             log(f"  [WARN] MediaResearchAgent encontrou exceção ({e}). Usando fallback legado.", warn=True)
             asset_map = source_media(scenes, cfg, project_dir)
     else:
+        media_cfg = cfg.get("media") or {}
+        source_mode = str(media_cfg.get("media_source_mode", "")).strip().lower()
+        local_only = str(media_cfg.get("local_media_mode", "prefer")).lower() == "required"
+        if source_mode or local_only:
+            raise RuntimeError(
+                f"Modo de origem de mídia '{source_mode or 'local_only'}' ativo, "
+                "mas MediaResearchAgent não está disponível; fallback legado bloqueado."
+            )
         log("  [INFO] MediaResearchAgent não carregado. Usando fallback de mídia.")
         asset_map = source_media(scenes, cfg, project_dir)
 
@@ -3167,7 +3441,14 @@ def main():
     # PASSO 5/10 — Processamento Visual (Ken Burns + Normalização 1080p)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     print("[5/10] Processamento visual (Efeitos profissionais + padronização 1080p)...")
-    clips = process_all_scenes(scenes, asset_map, temp_clips, ffmpeg_path, cfg)
+    clips = process_all_scenes(
+        scenes,
+        asset_map,
+        temp_clips,
+        ffmpeg_path,
+        cfg,
+        asset_sequences=local_asset_sequences,
+    )
     log(f"  {len(clips)} clipes processados na pasta temp_clips do projeto.")
     if not args.no_checkpoint:
         state["clips"] = clips
