@@ -1878,12 +1878,19 @@ class MediaResearchAgent:
 
         review_callback = getattr(self, "local_media_review_callback", None)
         if review_callback is not None:
-            chosen_paths = review_callback(scene, match)
+            result = review_callback(scene, match)
             
-            # [CORREÇÃO] Garante que chosen_paths é uma lista/iterável válido e não um booleano
-            if not chosen_paths or isinstance(chosen_paths, bool):
+            # Se retornou booleano (modo GUI antigo): True = aprovado, False = rejeitado
+            if isinstance(result, bool):
+                if not result:
+                    return None
+                chosen_paths = [str(match["path"])]
+            # Se retornou None ou lista vazia
+            elif result is None:
                 return None
-                
+            else:
+                chosen_paths = result
+            
             # Se por acaso retornar apenas uma string (caminho único), converte para lista
             if isinstance(chosen_paths, (str, Path)):
                 chosen_paths = [str(chosen_paths)]

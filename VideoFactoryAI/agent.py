@@ -2349,7 +2349,7 @@ def get_audio_duration_simple(ffmpeg: str, audio: str) -> float:
 LOCAL_MEDIA_REVIEW_MARKER = "__LOCAL_MEDIA_REVIEW__"
 
 
-def _request_local_media_review(scene: dict, candidate: dict) -> bool:
+def _request_local_media_review(scene: dict, candidate: dict):
     """Request a manual decision over stdin; the desktop GUI renders the image."""
     review = {
         "scene_id": scene.get("id"),
