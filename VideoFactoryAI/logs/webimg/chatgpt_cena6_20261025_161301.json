@@ -1,0 +1,24 @@
+{
+  "imgs": [
+    {
+      "src": "https://cdn.auth0.com/avatars/us.png",
+      "w": 120,
+      "h": 120,
+      "visivel": true
+    },
+    {
+      "src": "https://cdn.auth0.com/avatars/us.png",
+      "w": 120,
+      "h": 120,
+      "visivel": false
+    }
+  ],
+  "botoes": [],
+  "campos": [
+    {
+      "tag": "DIV",
+      "visivel": true,
+      "dica": "Pergunte ao ChatGPT"
+    }
+  ]
+}

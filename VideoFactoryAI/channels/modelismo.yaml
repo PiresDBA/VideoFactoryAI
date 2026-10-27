@@ -1,0 +1,34 @@
+# Modelismo Ferroviário - Canal Configuration
+# This file enables the modelismo channel for VideoFactoryAI
+
+canal: "modelismo"
+nome: "Modelismo Ferroviário"
+descricao: "Documentários sobre ferreomodelismo, modelismo ferroviário, escalas HO/N/O, técnicas de construção, weathering, DCC, scenery"
+
+# Persona e estilo são carregados automaticamente do config/canal_personas.json
+# Não é necessário definir persona aqui
+
+# Palavras-chave para busca de imagens/vídeos relevantes
+palavras_chave_busca:
+  - "model railroad"
+  - "model railroad HO scale"
+  - "model railroad layout"
+  - "model railroad scenery"
+  "model railroad weathering"
+  - "model railroad DCC"
+  - "model railroad track laying"
+  - "model railroad benchwork"
+  - "model railroad scenery"
+  - "model railroad structures"
+
+# Configurações de busca de mídia
+media_search:
+  usar_wikipedia: true
+  usar_duckduckgo: true
+  max_fontes: 8
+  
+# Configurações de validação
+validacao:
+  min_palavras_por_cena: 50
+  max_palavras_por_cena: 200
+  verificar_fatos: true

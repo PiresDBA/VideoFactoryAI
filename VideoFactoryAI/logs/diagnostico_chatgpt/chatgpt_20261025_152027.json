@@ -1,0 +1,17 @@
+{
+  "url": "https://chatgpt.com/",
+  "titulo": "ChatGPT",
+  "campos": [
+    {
+      "tag": "DIV",
+      "id": "",
+      "role": "textbox",
+      "contenteditable": "true",
+      "placeholder": "",
+      "aria_label": "Pergunte ao ChatGPT",
+      "visivel": true,
+      "classe": "ProseMirror ProseMirror-focused"
+    }
+  ],
+  "texto_inicio": "Pular para o conteúdo\nNovo chat\nPesquisar\nRecentes\nBiblioteca\nOferta gratuita\nO que você tem em mente hoje?\n\n\n\n\nPensar"
+}

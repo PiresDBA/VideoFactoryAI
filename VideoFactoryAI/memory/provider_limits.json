@@ -1,0 +1,8 @@
+{
+  "providers": {
+    "grok": {
+      "disabled_until": "2026-10-27T00:00:00-03:00",
+      "reason": "grok webchat reported an image-generation limit"
+    }
+  }
+}

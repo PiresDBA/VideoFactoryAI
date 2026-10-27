@@ -91,6 +91,8 @@ roteiros/*.txt
 debug_*.py
 fix_*.py
 test_*.py
+!VideoFactoryAI/tests/test_local_media_agent.py
+!VideoFactoryAI/tests/test_local_media_review.py
 testar_*.py
 relatorio_*.json
 relatorio_fontes*.json

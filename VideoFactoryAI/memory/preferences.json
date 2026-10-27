@@ -1,0 +1,30 @@
+{
+  "run_count": 33,
+  "preferred_voice": "pt-BR-AntonioNeural",
+  "effective_sources": {
+    "pixabay_image": 20,
+    "pixabay_video": 27,
+    "pil_fallback": 24,
+    "chatgpt_webchat": 18,
+    "qwen_webchat": 6,
+    "gemini_webchat": 21,
+    "local_library": 46
+  },
+  "avg_video_duration_s": 174.9,
+  "approved_music_tracks": [],
+  "templates_used": [],
+  "media_stats": {
+    "l1_video_hits": 25,
+    "l2_image_hits": 16,
+    "l3_ai_public_hits": 0,
+    "l4_ai_generated": 3
+  },
+  "last_updated": "2026-10-26T20:27:21.884450",
+  "voice_settings": {
+    "voice": "pt-BR-AntonioNeural",
+    "rate": "-5%",
+    "pitch": "-2Hz",
+    "engine": "edge-tts",
+    "saved_at": "2026-10-27T00:37:58.846608"
+  }
+}

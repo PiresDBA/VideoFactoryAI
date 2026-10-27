@@ -1,0 +1,302 @@
+{
+  "scenes": [
+    {
+      "id": 1,
+      "tipo": "video",
+      "arquivo": "cena_01.mp4",
+      "query": "geopolitics world news documentary footage",
+      "wikimedia_q": "",
+      "ai_prompt": "",
+      "needs_ai": false,
+      "descricao": "Há momentos na história humana em que o tempo parece acelerar e o destino de mil",
+      "texto": "Há momentos na história humana em que o tempo parece acelerar e o destino de milhões é decidido em um punhado de escolhas cruciais. A história de Joao e pe de feijao é uma dessas narrativas fundamentais, onde coragem, tragédia e ambição colidiram de maneira definitiva.",
+      "start": 0.0,
+      "end": 17.88,
+      "duration": 17.88
+    },
+    {
+      "id": 2,
+      "tipo": "video",
+      "arquivo": "cena_02.mp4",
+      "query": "geopolitics world news documentary footage",
+      "wikimedia_q": "",
+      "ai_prompt": "",
+      "needs_ai": false,
+      "descricao": "Para compreender a verdadeira magnitude de Joao e pe de feijao, é preciso recuar",
+      "texto": "Para compreender a verdadeira magnitude de Joao e pe de feijao, é preciso recuar até as raízes que alimentaram esse movimento. As tensões acumuladas ao longo de anos criaram um terreno fértil para que a disputa se aprofundasse, envolvendo atores decisivos cujas ações ecoaram por continentes inteiros.",
+      "start": 17.88,
+      "end": 37.96,
+      "duration": 20.08
+    },
+    {
+      "id": 3,
+      "tipo": "video",
+      "arquivo": "cena_03.mp4",
+      "query": "diplomats meeting table negotiation",
+      "wikimedia_q": "",
+      "ai_prompt": "",
+      "needs_ai": false,
+      "descricao": "À medida que as semanas se transformavam em meses, a escalada tornou-se inevitáv",
+      "texto": "À medida que as semanas se transformavam em meses, a escalada tornou-se inevitável. Em gabinetes fechados e bases estratégicas, cada relatório de inteligência era examinado minuciosamente. Decisões tomadas sob extrema pressão revelaram tanto a fragilidade dos acordos diplomáticos quanto a intransigência de lideranças dispostas a arriscar tudo por sua hegemonia.",
+      "start": 37.96,
+      "end": 62.72,
+      "duration": 24.76
+    },
+    {
+      "id": 4,
+      "tipo": "video",
+      "arquivo": "cena_04.mp4",
+      "query": "handshake diplomacy meeting politicians",
+      "wikimedia_q": "",
+      "ai_prompt": "",
+      "needs_ai": false,
+      "descricao": "O clímax desse embate marcou uma virada definitiva. Novas fronteiras foram traça",
+      "texto": "O clímax desse embate marcou uma virada definitiva. Novas fronteiras foram traçadas, alianças foram testadas ao limite e a população acompanhou com apreensão o desenrolar de uma disputa onde o menor erro de cálculo poderia resultar em catástrofe irreversível.",
+      "start": 62.72,
+      "end": 80.04,
+      "duration": 17.32
+    },
+    {
+      "id": 5,
+      "tipo": "video",
+      "arquivo": "cena_05.mp4",
+      "query": "aircraft carrier ocean military navy",
+      "wikimedia_q": "",
+      "ai_prompt": "",
+      "needs_ai": false,
+      "descricao": "A resolução desse impasse exigiu concessões dolorosas e diplomacia de bastidores",
+      "texto": "A resolução desse impasse exigiu concessões dolorosas e diplomacia de bastidores. Tratados secretos, canais de comunicação de emergência e o recuo estratégico de forças militares permitiram que a crise encontrasse um desfecho, ainda que temporário, redesenhando para sempre as regras do jogo internacional.",
+      "start": 80.04,
+      "end": 101.04,
+      "duration": 21.0
+    },
+    {
+      "id": 6,
+      "tipo": "video",
+      "arquivo": "cena_06.mp4",
+      "query": "united nations flags international assembly",
+      "wikimedia_q": "",
+      "ai_prompt": "",
+      "needs_ai": false,
+      "descricao": "O tempo segue seu curso implacável, mas a memória dos acontecimentos de Joao e p",
+      "texto": "O tempo segue seu curso implacável, mas a memória dos acontecimentos de Joao e pe de feijao permanece como um monumento à capacidade de transformação da humanidade.",
+      "start": 101.04,
+      "end": 118.28,
+      "duration": 17.24
+    },
+    {
+      "id": 7,
+      "tipo": "video",
+      "arquivo": "cena_07.mp4",
+      "query": "geopolitics world news documentary footage",
+      "wikimedia_q": "",
+      "ai_prompt": "",
+      "needs_ai": false,
+      "descricao": "Lembrar esses passos não é apenas olhar para trás, mas sim iluminar o caminho qu",
+      "texto": "Lembrar esses passos não é apenas olhar para trás, mas sim iluminar o caminho que ainda temos por construir.",
+      "start": 116.96,
+      "end": 119.16,
+      "duration": 2.2
+    }
+  ],
+  "audio_path": "C:\\Projeto_Ira_EUA\\narracao.mp3",
+  "audio_dur": 119.16,
+  "srt_path": "C:\\Projeto_Ira_EUA\\narracao.srt",
+  "srt_blocks": [
+    {
+      "id": 1,
+      "start": 0.0,
+      "end": 4.48,
+      "duration": 4.48,
+      "text": "há momentos na história humana em que o tempo parece acelerar e o destino de milhões"
+    },
+    {
+      "id": 2,
+      "start": 4.48,
+      "end": 8.0,
+      "duration": 3.52,
+      "text": "é decidido em um punhado de escolhas cruciais."
+    },
+    {
+      "id": 3,
+      "start": 8.0,
+      "end": 13.84,
+      "duration": 5.84,
+      "text": "A história de João e Pede Feijão é uma dessas narrativas fundamentais, onde coragem,"
+    },
+    {
+      "id": 4,
+      "start": 13.84,
+      "end": 17.88,
+      "duration": 4.04,
+      "text": "tragédia e ambição colidiram de maneira definitiva."
+    },
+    {
+      "id": 5,
+      "start": 17.88,
+      "end": 22.96,
+      "duration": 5.08,
+      "text": "Para compreender a verdadeira magnitude de João e Pede Feijão, é preciso recuar"
+    },
+    {
+      "id": 6,
+      "start": 22.96,
+      "end": 26.4,
+      "duration": 3.44,
+      "text": "até as raízes que alimentaram esse movimento."
+    },
+    {
+      "id": 7,
+      "start": 26.56,
+      "end": 31.2,
+      "duration": 4.64,
+      "text": "As tensões acumuladas ao longo de anos criaram um terreno fértil para que a disputa"
+    },
+    {
+      "id": 8,
+      "start": 31.2,
+      "end": 37.96,
+      "duration": 6.76,
+      "text": "se aprofundasse, envolvendo atores decisivos cujas ações equaram por continentes inteiros."
+    },
+    {
+      "id": 9,
+      "start": 37.96,
+      "end": 44.0,
+      "duration": 6.04,
+      "text": "A medida que essa semana se transformavam em meses, a escalada tornou-se inevitável."
+    },
+    {
+      "id": 10,
+      "start": 44.0,
+      "end": 49.6,
+      "duration": 5.6,
+      "text": "Em gabinetes fechados e bases estratégicas, cada relatório de inteligência é examinado"
+    },
+    {
+      "id": 11,
+      "start": 49.6,
+      "end": 51.52,
+      "duration": 1.92,
+      "text": "minuciosamente."
+    },
+    {
+      "id": 12,
+      "start": 51.52,
+      "end": 57.08,
+      "duration": 5.56,
+      "text": "Decisões tomadas sob estrema pressão revelaram tanto a fragilidade dos acordos diplomáticos"
+    },
+    {
+      "id": 13,
+      "start": 57.08,
+      "end": 62.72,
+      "duration": 5.64,
+      "text": "quanto a intransigência de lideranças dispostas a riscar tudo por sua demonia."
+    },
+    {
+      "id": 14,
+      "start": 62.72,
+      "end": 66.76,
+      "duration": 4.04,
+      "text": "O clímate desse embate marcou uma virada definitiva."
+    },
+    {
+      "id": 15,
+      "start": 66.76,
+      "end": 72.48,
+      "duration": 5.72,
+      "text": "Novas fronteiras foram traçadas, alianças foram testadas ao limite e a população acompanhou"
+    },
+    {
+      "id": 16,
+      "start": 72.48,
+      "end": 76.88,
+      "duration": 4.4,
+      "text": "com a preenção o desenrolar de uma disputa onde o menor erro de cálculo poderia"
+    },
+    {
+      "id": 17,
+      "start": 76.88,
+      "end": 80.04,
+      "duration": 3.16,
+      "text": "resultar em catástrofio irreversível."
+    },
+    {
+      "id": 18,
+      "start": 80.04,
+      "end": 86.4,
+      "duration": 6.36,
+      "text": "A resolução desse impasse exigiu concessões dolorosas e diplomacia de bastidores."
+    },
+    {
+      "id": 19,
+      "start": 86.4,
+      "end": 91.66,
+      "duration": 5.26,
+      "text": "Tratado e secretos, canais de comunicação de emergência e o recurstratégico de forças"
+    },
+    {
+      "id": 20,
+      "start": 91.66,
+      "end": 97.48,
+      "duration": 5.82,
+      "text": "militares permitiram que a crise encontrá-se um desfecho, ainda que temporário, redesinhando"
+    },
+    {
+      "id": 21,
+      "start": 97.48,
+      "end": 101.04,
+      "duration": 3.56,
+      "text": "para sempre as regras do jogo internacional."
+    },
+    {
+      "id": 22,
+      "start": 101.04,
+      "end": 106.6,
+      "duration": 5.56,
+      "text": "O tempo segue seu curso implacável, mas a memória dos acontecimentos de João e Pede Fejão"
+    },
+    {
+      "id": 23,
+      "start": 106.6,
+      "end": 111.92,
+      "duration": 5.32,
+      "text": "permanece como um monumento à capacidade de transformação da humanidade."
+    },
+    {
+      "id": 24,
+      "start": 111.92,
+      "end": 116.96,
+      "duration": 5.04,
+      "text": "Lembrar esses passos não é apenas olhar para trás, mas se iluminar o caminho que ainda"
+    },
+    {
+      "id": 25,
+      "start": 116.96,
+      "end": 118.28,
+      "duration": 1.32,
+      "text": "temos por construir."
+    }
+  ],
+  "asset_map": {
+    "1": "C:\\Projeto_Ira_EUA\\videos\\cena_01.mp4",
+    "2": "C:\\Projeto_Ira_EUA\\videos\\cena_02.mp4",
+    "3": "C:\\Projeto_Ira_EUA\\videos\\cena_03.mp4",
+    "4": "C:\\Projeto_Ira_EUA\\videos\\cena_04.mp4",
+    "5": "C:\\Projeto_Ira_EUA\\videos\\cena_05.mp4",
+    "6": "C:\\Projeto_Ira_EUA\\videos\\cena_06.mp4",
+    "7": "C:\\Projeto_Ira_EUA\\videos\\cena_07.mp4"
+  },
+  "clips": [
+    "C:\\Projeto_Ira_EUA\\temp_clips\\clip_01.mp4",
+    "C:\\Projeto_Ira_EUA\\temp_clips\\clip_02.mp4",
+    "C:\\Projeto_Ira_EUA\\temp_clips\\clip_03.mp4",
+    "C:\\Projeto_Ira_EUA\\temp_clips\\clip_04.mp4",
+    "C:\\Projeto_Ira_EUA\\temp_clips\\clip_05.mp4",
+    "C:\\Projeto_Ira_EUA\\temp_clips\\clip_06.mp4",
+    "C:\\Projeto_Ira_EUA\\temp_clips\\clip_07.mp4"
+  ],
+  "output_video": "C:\\Projeto_Ira_EUA\\saida\\historia_final.mp4",
+  "thumbnail": "C:\\Projeto_Ira_EUA\\saida\\thumbnail.jpg"
+}

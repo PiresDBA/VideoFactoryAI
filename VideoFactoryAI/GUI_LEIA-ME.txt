@@ -1,0 +1,33 @@
+VideoFactoryAI — Interface gráfica
+==================================
+
+COMO ABRIR (Windows)
+1. Extraia o ZIP inteiro para uma pasta.
+2. Confira se agent.py e videofactory_gui.py estão na mesma pasta.
+3. Dê duplo clique em abrir_interface.bat.
+4. Se o Windows/Python reclamar de dependências, execute pelo ambiente Python usado pelo projeto.
+
+O QUE A INTERFACE FAZ
+- Executa o agent.py existente como subprocesso, sem duplicar o pipeline.
+- Permite selecionar um roteiro .txt ou informar um tema para gerar roteiro.
+- Configura duração, canal, motor/voz TTS, Whisper, legendas, checkpoints e Diretor de Arte.
+- Ao selecionar XTTS, permite escolher o arquivo WAV de referência usado para clonar a voz. O caminho escolhido é passado diretamente ao processo do pipeline.
+- Se XTTS falhar, a GUI não permite troca silenciosa para Edge-TTS; o erro aparece no log para você saber que a voz clonada não foi usada.
+- Permite escolher o modo de fonte YouTube e, quando necessário, um arquivo local com direitos de reutilização.
+- Mostra as mensagens do pipeline e permite solicitar interrupção.
+- O botão “Abrir saída” abre a pasta saida se ela existir; caso contrário, abre a pasta do projeto.
+
+USAR CLONAGEM DE VOZ COM XTTS
+1. Em “Motor TTS”, escolha “xtts”.
+2. Em “Áudio-base XTTS”, clique em “Escolher WAV…” e selecione uma gravação da sua própria voz.
+3. Prefira WAV de 10 a 30 segundos, fala natural, sem música ou ruído, com uma única pessoa falando.
+4. Clique em “Iniciar produção”. A seleção é enviada ao processo por VF_XTTS_SPEAKER e tem prioridade sobre o caminho do config.yaml.
+5. Se o ambiente XTTS/worker/modelo estiver indisponível, a execução mostrará erro em vez de trocar silenciosamente para Edge-TTS.
+
+IMPORTANTE
+- Esta GUI é uma camada de interface; ela não instala automaticamente as dependências do projeto.
+- A pasta selecionada precisa conter agent.py e o restante da estrutura real do VideoFactoryAI.
+- O ZIP do projeto enviado para esta conversa não continha a pasta modules/ referenciada por agent.py. A interface pode abrir, mas o pipeline completo só funcionará se você usar a pasta completa do projeto, incluindo esses módulos.
+- As chaves de API continuam no config.yaml/ambiente do projeto. A interface não pede nem imprime chaves.
+- “strict” pode interromper a produção se o Diretor de Arte encontrar problemas não resolvidos.
+- “authorized” e “both” exigem arquivo local e confirmação de direitos. O programa não baixa o vídeo a partir da URL de origem.

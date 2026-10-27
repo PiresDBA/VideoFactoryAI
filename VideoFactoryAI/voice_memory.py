@@ -82,9 +82,11 @@ class VoiceMemory:
 
         return cfg
 
-    def log_summary(self) -> str:
-        """Retorna string legível com as preferências atuais."""
+    def log_summary(self, active_cfg: Optional[Dict] = None) -> str:
+        """Return a readable summary of the effective voice settings."""
         s = self.load()
+        active_tts = (active_cfg or {}).get("tts") or {}
+        s.update({key: value for key, value in active_tts.items() if value})
         return (f"Voz: {s['voice']} | Engine: {s['engine']} | "
                 f"Rate: {s['rate']} | Pitch: {s['pitch']}")
 

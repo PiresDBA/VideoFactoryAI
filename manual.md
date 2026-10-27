@@ -1,7 +1,7 @@
 # 📘 Manual do Usuário — VideoFactoryAI
 
-> **Versão:** 3.0  
-> **Data:** Outubro 2026  
+> **Versão:** 3.8<br>
+> **Data:** Outubro 2026
 > **Local do projeto:** C:\Fabrica-de-videos\VideoFactoryAI  
 > **Público-alvo:** Desenvolvedores, operadores de sistema e gestores de projeto  
 > **Nível:** Iniciante a intermediário (não é necessário ser especialista em IA)
@@ -107,6 +107,7 @@ O sistema **não usa banco de dados relacional**. Toda a comunicação entre mó
 
 | Nível | Tipo | Fontes |
 |-------|------|--------|
+| L0 | Biblioteca local | Imagens fornecidas pelo usuário (direitos de uso confirmados pelo usuário) |
 | L1 | Vídeo real livre | Pixabay, Pexels, Internet Archive, Wikimedia |
 | L1 (extra) | Vídeo via yt-dlp | YouTube, Vimeo, Internet Archive (CC) |
 | L2 | Imagem real | Pixabay, Pexels, Unsplash, Wikimedia Commons |
@@ -154,6 +155,8 @@ O sistema **não usa banco de dados relacional**. Toda a comunicação entre mó
 ## 5. Fluxo de Dados (Pipeline)
 
 O sistema funciona em **10 passos sequenciais**:
+
+No modo **somente narração** (`--audio-only`), o pipeline encerra após sintetizar `projetos/<slug>/narracao.mp3`; não planeja cenas, não busca mídias e não gera SRT nem vídeo.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -281,9 +284,10 @@ A seguir, cada arquivo Python do projeto explicado de forma detalhada:
 
 ### 5.6 `VideoFactoryAI/media_research_agent.py` — Pesquisa de Mídia
 
-**O que faz:** Busca imagens e vídeos gratuitos seguindo hierarquia L1→L4.
+**O que faz:** Busca imagens e vídeos usando biblioteca local prioritária para imagens e hierarquia L1→L4 para fontes online.
 
 **Hierarquia:**
+- **L0 (Biblioteca local):** imagens fornecidas pelo usuário, pré-selecionadas pelos títulos em português e avaliadas visualmente pelo Ollama local
 - **L1 (Vídeo real):** Pixabay, Pexels, Wikimedia, Internet Archive
 - **L2 (Imagem real):** Pixabay, Wikimedia, Pexels, Unsplash, reshot, negativespace, freestocks, newoldstock
 - **L3 (IA pública):** Openverse (CC comercial)
@@ -294,6 +298,21 @@ A seguir, cada arquivo Python do projeto explicado de forma detalhada:
 - Validação de compatibilidade imagem↔roteiro (ImageEvaluatorAgent)
 - Proteção contra duplicatas (hash MD5)
 - Normalização WEBP/PNG → JPEG
+- Busca de imagens locais antes das fontes online e da geração por IA
+
+### 5.6.1 `VideoFactoryAI/local_media_agent.py` — Biblioteca Local de Imagens
+
+**O que faz:** Indexa os títulos de imagens JPG, JPEG, PNG e WEBP e usa o modelo de visão Ollama configurado para selecionar a imagem visualmente mais compatível com cada cena.
+
+**Funcionamento:**
+- Os tokens do texto da cena são comparados aos títulos dos arquivos para formar uma lista curta de candidatas; as imagens e seus títulos são enviados somente ao serviço Ollama local.
+- A resposta JSON do modelo contém a imagem escolhida e uma nota de confiança de 0 a 10, normalizada para 0 a 1. Correspondências abaixo do limiar configurado são rejeitadas.
+- Na GUI, a opção **Revisar imagens locais abaixo do limiar** vem ativada. Para candidatas abaixo do limiar, a tela mostra a imagem e o trecho do roteiro; aprovar aceita a imagem para a cena. Rejeitar coloca a candidata em quarentena somente para aquela cena e exibe a próxima candidata. Nenhum arquivo da biblioteca é movido ou alterado; imagens rejeitadas continuam disponíveis para outras cenas.
+- Em `prefer`, é usado para cenas de imagem; vídeos mantêm a hierarquia existente.
+- Em `required`, todas as cenas usam imagens locais (cenas planejadas como vídeo são convertidas para imagem) e nenhuma fonte online é consultada.
+- A avaliação visual do Ollama substitui a validação Gemini para imagens locais; o `MediaResearchAgent` ainda aplica deduplicação por hash e normaliza as imagens para JPEG.
+- As imagens são reduzidas em memória para no máximo 768 px antes da análise, como no `renomear_imagens.py`; os originais permanecem intactos.
+- O índice de títulos é criado em memória no início da execução; não são necessários embeddings, PyTorch ou `open_clip_torch`.
 
 ### 5.7 `VideoFactoryAI/image_evaluator_agent.py` — Validador de Imagem
 
@@ -370,15 +389,55 @@ O áudio da narração é transcrito via faster-whisper (mais rápido que openai
 - Hotwords: nomes próprios extraídos do roteiro (ex: "Constantinopla", "Mehmed")
 - Pós-processamento: acentuação PT-BR e correção fuzzy de nomes próprios
 
-### Passo 5: Busca de Mídia (L1→L4)
+### Passo 5: Busca de Mídia (L0→L4)
 
-O pipeline busca mídia nesta ordem:
+Para cenas de imagem, o pipeline busca mídia nesta ordem:
+0. **L0:** biblioteca local configurada (shortlist por título e avaliação visual pelo Ollama local; direitos de uso confirmados pelo usuário)
 1. **L1:** Pixabay, Pexels, Wikimedia, Internet Archive (vídeo/imagem real)
 2. **L2:** reshot, negativespace, freestocks, newoldstock (imagem)
 3. **L3:** Openverse (CC comercial)
 4. **L4:** Pollinations (IA gerada) ou PIL card (fallback)
 
-Cada asset passa por validação de imagem↔roteiro e dedup por hash MD5.
+Na GUI, escolha a estratégia em **Origem das imagens** e indique a pasta da biblioteca local:
+
+Os nomes amigáveis mostrados na lista são convertidos para identificadores CLI (`local_only`, `local_then_online`, `webchat_only` ou `internet_images`); esses valores técnicos não devem ser substituídos pelo texto exibido.
+
+- **Somente biblioteca local (`local_only`):** usa apenas imagens locais; cenas planejadas como vídeo viram imagens. Cenas sem correspondência ficam pendentes, sem cache ou fallback online.
+- **Biblioteca local → internet / WebChat (`local_then_online`):** tenta a biblioteca local primeiro e, sem correspondência, percorre mídia online e geradores WebChat. Cenas planejadas como vídeo ainda podem usar fontes de vídeo.
+- **Somente WebChat (`webchat_only`):** usa apenas geradores de imagem via navegador, como Gemini, Dreamina, Copilot e demais provedores WebChat configurados. Não consulta a biblioteca local, bancos de imagens ou Openverse.
+- **Somente imagens da internet (`internet_images`):** consulta bancos de imagens e Openverse; não usa a biblioteca local nem geração WebChat/IA. Cenas planejadas como vídeo viram imagens.
+
+Os modos explícitos não reutilizam imagens de execuções anteriores, o cache persistente ou clipes retomados, pois esses arquivos poderiam ter vindo de uma fonte não permitida pela estratégia selecionada. Se o agente de mídia falhar, o pipeline também não usa o fallback legado. `local_media_mode` permanece disponível para compatibilidade com configurações antigas; `media_source_mode` define a política completa quando informado. Cada imagem local selecionada passa por validação de imagem↔roteiro e dedup por hash MD5.
+
+Na retomada da produção, a narração existente só é reutilizada se o texto e as configurações TTS coincidirem, incluindo motor, voz, velocidade e tom. Trocar a voz invalida a narração antiga e gera um novo áudio. Uma voz explicitamente selecionada na GUI/CLI tem prioridade sobre a voz padrão do perfil do canal.
+
+#### Configuração da biblioteca local
+
+Em `VideoFactoryAI/config.yaml`, configure:
+
+```yaml
+media:
+  media_source_mode: local_only
+  local_media_enabled: true
+  local_media_mode: required
+  local_media_folder: 'C:\Fabrica-de-videos\projetos\makete_ho\imagens'
+  local_similarity_threshold: 0.80
+  min_local_images: 150
+```
+
+`media_source_mode` aceita `local_only`, `local_then_online`, `webchat_only` e `internet_images`, com a mesma seleção disponível na tela inicial da GUI. O caminho da biblioteca pode ser absoluto ou relativo ao workspace da produção; a GUI carrega o padrão do `config.yaml` e permite escolher outra pasta. `local_media_mode` aceita `off`, `prefer` e `required` para compatibilidade com configurações anteriores. Configure `local_ollama_model`, `local_ollama_url`, `local_ollama_candidate_count` e `local_ollama_timeout_s` em `media`; por segurança, a URL só aceita o serviço local (`localhost` ou loopback HTTP). Os títulos dos arquivos em português formam uma shortlist de até quatro imagens, e apenas essas candidatas são enviadas ao modelo local, junto ao texto, à descrição e à consulta planejada para a cena. A escolha precisa atingir `local_similarity_threshold`; a nota Ollama de 0 a 10 é normalizada para 0 a 1. Na GUI, **Revisar imagens locais abaixo do limiar** permite aprovar manualmente uma candidata que não atingiu a nota; ao rejeitar, ela é excluída apenas da cena atual e a próxima candidata é apresentada. Desative a opção para não revisar candidatos abaixo do limiar; no modo somente local, cenas sem correspondência interrompem a produção. Nenhuma decisão move ou altera as imagens originais. As imagens aceitas são convertidas para JPEG no destino da cena. O relatório identifica a origem local, mas cabe ao usuário confirmar que possui os direitos de uso.
+
+`min_local_images` (ou `--min-local-images`) define uma quantidade mínima de imagens locais únicas para o vídeo. O valor `0` mantém o comportamento de uma imagem por cena; por exemplo, `150` reparte no mínimo 150 imagens em cortes dentro das cenas existentes, sem criar novas cenas de narração. Em `local_only`, a produção é interrompida se não houver imagens suficientes aprovadas ou se alguma cena ficar sem imagem — nunca completa o vídeo com internet ou cartões de fallback. A GUI oferece o campo **Mínimo de imagens locais únicas**.
+
+Configuração Ollama:
+
+```yaml
+media:
+  local_ollama_model: llava-phi3
+  local_ollama_url: http://127.0.0.1:11434
+  local_ollama_candidate_count: 4
+  local_ollama_timeout_s: 180
+```
 
 ### Passo 6: Processamento Visual
 
@@ -450,6 +509,10 @@ python VideoFactoryAI/agent.py --topic "Tema" --duration 10
 python VideoFactoryAI/agent.py roteiro.txt --resume
 ```
 
+Na GUI, **Gerar somente SRT da narração existente** não produz áudio e não usa a voz selecionada; exige um `narracao.mp3` já existente no projeto. Para gerar/regerar a narração com a voz escolhida, use **Gerar SRT e incluir no vídeo** ou **Não gerar legendas** e inicie a produção completa.
+
+Para criar apenas o áudio, selecione **Gerar somente narração MP3 (sem legenda nem vídeo)** em **Saída da produção**. A voz e o motor TTS selecionados serão usados; o MP3 será salvo em `projetos/<slug>/narracao.mp3`. Esse modo não executa Whisper, pesquisa de imagens ou renderização. Pela linha de comando, use `--audio-only`; esse modo é incompatível com `--subtitles-only`.
+
 ### 7.7 Parâmetros disponíveis
 
 | Parâmetro | O que faz | Exemplo |
@@ -461,8 +524,12 @@ python VideoFactoryAI/agent.py roteiro.txt --resume
 | `--tts-engine xtts` | Usar voz clonada (XTTS) | `--tts-engine xtts` |
 | `--subtitles` | Gerar legendas no vídeo | `--subtitles` |
 | `--no-subtitles` | Sem legendas (padrão) | (padrão) |
+| `--audio-only` | Gerar apenas `narracao.mp3`, sem cenas, legendas ou vídeo | `python agent.py roteiro.txt --audio-only --voice pt-BR-ThalitaNeural --tts-engine edge-tts` |
 | `--voice VOZ` | Escolher voz da narração | `--voice pt-BR-AntonioNeural` |
 | `--resume` | Retomar produção interrompida | `--resume` |
+| `--media-source-mode MODO` | Escolher uma das quatro estratégias de origem de imagem | `--media-source-mode local_only` |
+| `--local-media-folder PASTA` | Definir a biblioteca local de imagens | `--local-media-folder "C:\Fabrica-de-videos\projetos\makete_ho\imagens"` |
+| `--min-local-images N` | Exigir no mínimo N imagens locais únicas e distribuí-las em cortes dentro das cenas | `--min-local-images 150` |
 
 ### 7.8 Exemplo completo
 
@@ -521,6 +588,8 @@ O programa **não usa imagens aleatórias da internet**. Ele busca apenas mídia
 | negativespace | Imagem |
 | freestocks | Imagem |
 | newoldstock | Imagem |
+
+Uma biblioteca local pode ser priorizada antes da busca online, mas isso não altera a lista de fontes online aprovadas. Use nela apenas imagens próprias ou com autorização/licença adequada; o sistema não verifica os direitos desses arquivos.
 
 **O programa NÃO usa:**
 - Shutterstock, Getty Images, iStock, Adobe Stock (são pagos)
@@ -699,9 +768,17 @@ Após **QUALQUER** mudança (código, config, dependência, pipeline, fontes, va
 
 | Versão | Data | O que mudou | Arquivos afetados | Autor |
 |--------|------|-------------|-------------------|-------|
+| 3.9 | 26/10/2026 | Corrigida a resolução de `imagens` relativa para o workspace do projeto; adicionado mínimo configurável de imagens locais distribuídas em cortes, com falha segura sem fallback no modo local | `VideoFactoryAI/agent.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/config.yaml`, `modules/visual_processor.py`, `VideoFactoryAI/tests/test_local_media_review.py`, `VideoFactoryAI/tests/test_gui_media_controls.py`, `VideoFactoryAI/tests/test_visual_processor_regressions.py`, `manual.md` | Copilot |
+| 3.8 | 26/10/2026 | Adicionado modo GUI/CLI para sintetizar somente a narração MP3, sem planejar cenas, gerar legendas ou renderizar vídeo; voz explicitamente selecionada agora prevalece sobre o perfil do canal | `VideoFactoryAI/agent.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/tests/test_local_media_review.py`, `VideoFactoryAI/tests/test_gui_media_controls.py`, `manual.md` | Copilot |
+| 3.7 | 26/10/2026 | Corrigido o envio do identificador CLI da origem de mídia pela GUI e a derivação do slug dos metadados Gem ao produzir a partir de roteiro existente | `VideoFactoryAI/agent.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/tests/test_local_media_review.py`, `manual.md` | Copilot |
+| 3.6 | 26/10/2026 | Cache de narração passa a considerar configurações TTS para não reutilizar áudio de outra voz; log indica configuração efetiva e GUI esclarece que SRT isolado não gera narração | `VideoFactoryAI/agent.py`, `VideoFactoryAI/pipeline_resume.py`, `VideoFactoryAI/voice_memory.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/tests/test_local_media_review.py`, `VideoFactoryAI/tests/test_agent_resume_cli.py`, `manual.md` | Copilot |
+| 3.5 | 26/10/2026 | Adicionado seletor GUI com quatro políticas de origem, pasta configurável e roteamento que bloqueia fontes/cache/fallback fora do modo escolhido | `VideoFactoryAI/agent.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/config.yaml`, `VideoFactoryAI/tests/test_local_media_review.py`, `VideoFactoryAI/tests/test_gui_media_controls.py`, `manual.md` | Copilot |
 | 3.0 | 26/10/2026 | Versão inicial do manual | — | VideoFactoryAI |
 | 3.0 | 26/10/2026 | Regra de ouro de manutenção do manual adicionada | `manual.md` | — |
-| _(nova linha)_ | _(data)_ | _(descreva a mudança)_ | _(arquivos)_ | _(quem)_ |
+| 3.1 | 26/10/2026 | Adicionada busca CLIP prioritária para imagens da biblioteca local com cache de embeddings | `.gitignore`, `VideoFactoryAI/local_media_agent.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/config.yaml`, `requirements.txt`, `VideoFactoryAI/tests/test_local_media_agent.py`, `manual.md` | Copilot |
+| 3.2 | 26/10/2026 | Configurada a pasta `imagens` e o modo somente local, com bloqueio de fallback online e busca da próxima imagem exclusiva | `VideoFactoryAI/agent.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/local_media_agent.py`, `VideoFactoryAI/config.yaml`, `VideoFactoryAI/tests/test_local_media_agent.py`, `manual.md` | Copilot |
+| 3.3 | 26/10/2026 | Substituída busca CLIP por shortlist de títulos em português e seleção visual Ollama local; imagens locais não acionam validação Gemini | `VideoFactoryAI/local_media_agent.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/config.yaml`, `VideoFactoryAI/tests/test_local_media_agent.py`, `requirements.txt`, `manual.md` | Copilot |
+| 3.4 | 26/10/2026 | Adicionada revisão visual interativa para candidatos locais abaixo do limiar, rejeição válida apenas por cena e redução de imagens em memória | `.gitignore`, `VideoFactoryAI/agent.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/local_media_agent.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/tests/test_local_media_agent.py`, `VideoFactoryAI/tests/test_local_media_review.py`, `manual.md` | Copilot |
 
 > **Lembrete:** se a linha acima estiver vazia, o manual NÃO foi atualizado e você deve corrigir antes de commitar qualquer alteração.
 

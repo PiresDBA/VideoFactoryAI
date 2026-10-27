@@ -1,0 +1,24 @@
+VideoFactoryAI — atualização do gerenciamento de projetos
+=========================================================
+
+INSTALAÇÃO SEGURA
+1. Feche a interface gráfica.
+2. Faça backup de videofactory_gui.py.
+3. Extraia videofactory_gui.py deste pacote para a mesma pasta em que está o agent.py.
+4. Substitua somente o videofactory_gui.py. Não precisa trocar agent.py, config.yaml ou abrir_interface.bat.
+5. Abra novamente abrir_interface.bat.
+
+NOVO
+- Lista todas as pastas de projeto em ROOT_DIR/projetos, inclusive as que falharam antes do primeiro checkpoint. Retomada exige ckpts/last_run.json; exclusão não exige checkpoint.
+- “Retomar selecionado” procura o checkpoint e tenta localizar o roteiro em ROOT_DIR/roteiros/<projeto>.txt. Se não achar, exige que o usuário selecione o roteiro original ou informe o mesmo tema.
+- “Selecionar roteiro” abre inicialmente ROOT_DIR/roteiros.
+- O modo “Gerar somente SRT da narração existente” exige o roteiro original e o áudio já produzido; não executa TTS, aquisição de mídia ou renderização. Nesta versão, o SRT gerado é PT-BR.
+- “Excluir projeto…” remove a pasta de trabalho selecionada e, após confirmação, os artefatos exportados de nomes exatos correspondentes (vídeo MP4, thumbnail, relatório de qualidade e metadados). Não remove o roteiro original.
+- “Cancelar execução” tenta encerrar o processo e, no Windows, também processos filhos como FFmpeg. O checkpoint mais recente que já tenha sido gravado fica disponível para retomada.
+- “Abrir saída” usa a pasta ROOT_DIR/saida, que corresponde à estrutura de caminhos do agent.py.
+
+IMPORTANTE
+- O pipeline só consegue retomar a partir do último checkpoint gravado; o trabalho feito depois desse checkpoint pode precisar ser repetido.
+- Excluir projeto é permanente. Confira o nome e o caminho na confirmação.
+- A correção altera apenas a interface gráfica. Não corrige erros internos do FFmpeg, mídia ou Diretor de Arte.
+- Verificação realizada aqui: compilação/sintaxe Python e teste da função de slug. Não foi possível testar uma produção completa no ambiente Windows do usuário.

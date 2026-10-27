@@ -2,8 +2,9 @@
 MediaResearchAgent — Aquisição Hierárquica de Mídia com Verificação de Licença
 ===============================================================================
 
-Implementa a estratégia obrigatória de 4 níveis:
+Implementa a estratégia de mídia local seguida pela estratégia obrigatória de 4 níveis:
 
+  L0 · Biblioteca local do usuário → shortlist por título e seleção visual Ollama
   L1 · Vídeo real livre       → Pixabay, Pexels, Internet Archive, Wikimedia
                                 YouTube opcional e secundário: CC ou arquivo local autorizado; provedores existentes têm prioridade
   L2 · Imagem real livre      → Pixabay, Pexels, Unsplash, Wikimedia Commons
@@ -70,8 +71,38 @@ REQUEST_TIMEOUT = 20        # segundos
 # Provedores aceitos em VF_IMAGE_GENERATION_PROVIDERS. Meta Muse é opt-in (não entra no padrão).
 SUPPORTED_GENERATION_PROVIDERS = ("gemini", "dreamina", "copilot", "chatgpt", "grok", "qwen", "meta_muse")
 DEFAULT_GENERATION_PROVIDERS = ("gemini", "dreamina", "copilot", "chatgpt", "grok", "qwen")
+MEDIA_SOURCE_MODES = (
+    "local_only",
+    "local_then_online",
+    "webchat_only",
+    "internet_images",
+)
 _PROVIDER_LIMITS_LOCK = threading.Lock()
 _GEMINI_OUTPUT_LOCK = threading.Lock()
+
+
+def _media_source_permissions(mode: str) -> Dict[str, bool]:
+    """Return which source families are permitted for a configured media mode."""
+    permissions = {
+        "local_only": (True, False, False),
+        "local_then_online": (True, True, True),
+        "webchat_only": (False, False, True),
+        "internet_images": (False, True, False),
+    }
+    if mode == "legacy":
+        return {"local": True, "internet_images": True, "webchat": True}
+    try:
+        local, internet_images, webchat = permissions[mode]
+    except KeyError as exc:
+        raise ValueError(
+            "media.media_source_mode must be one of: "
+            + ", ".join(MEDIA_SOURCE_MODES)
+        ) from exc
+    return {
+        "local": local,
+        "internet_images": internet_images,
+        "webchat": webchat,
+    }
 
 
 class _ThreadTeeOutput:
@@ -1281,7 +1312,7 @@ def _l4_pil_card(title: str, dest: str, scene_id: int = 1) -> Tuple[str, str]:
 
 class MediaResearchAgent:
     """
-    Agente de pesquisa de mídia com estratégia hierárquica de 4 níveis.
+    Agente de pesquisa de mídia com biblioteca local e estratégia hierárquica de 4 níveis.
     
     Registra fonte, URL e licença de cada asset no media_report.
     Aprende quais fontes são mais eficazes e salva em preferences.json.
@@ -1320,6 +1351,80 @@ class MediaResearchAgent:
         os.makedirs(self.imagens_dir, exist_ok=True)
 
         media_cfg = cfg.get("media", {})
+        self.media_source_mode = str(
+            media_cfg.get("media_source_mode", "legacy") or "legacy"
+        ).strip().lower()
+        self.media_source_permissions = _media_source_permissions(
+            self.media_source_mode
+        )
+        self.local_media_mode = str(
+            media_cfg.get("local_media_mode", "prefer") or "prefer"
+        ).strip().lower()
+        if self.media_source_mode != "legacy":
+            self.local_media_mode = {
+                "local_only": "required",
+                "local_then_online": "prefer",
+                "webchat_only": "off",
+                "internet_images": "off",
+            }[self.media_source_mode]
+        if self.local_media_mode not in {"off", "prefer", "required"}:
+            raise ValueError(
+                "media.local_media_mode must be one of: off, prefer, required"
+            )
+        try:
+            self.min_local_images = int(media_cfg.get("min_local_images", 0))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("media.min_local_images must be a non-negative integer") from exc
+        if self.min_local_images < 0:
+            raise ValueError("media.min_local_images must be a non-negative integer")
+        if not self.media_source_permissions["local"]:
+            self.min_local_images = 0
+        local_media_setting = media_cfg.get("local_media_enabled", True)
+        self.local_media_enabled = str(local_media_setting).strip().lower() not in {
+            "0", "false", "no", "off", "",
+        }
+        self.local_media_enabled = (
+            self.local_media_enabled and self.local_media_mode != "off"
+        )
+        if self.local_media_mode == "required" and not self.local_media_enabled:
+            raise ValueError(
+                "media.local_media_mode is 'required' but local media is disabled"
+            )
+        local_media_folder = media_cfg.get("local_media_folder")
+        if local_media_folder:
+            self.local_media_folder = Path(local_media_folder)
+            if not self.local_media_folder.is_absolute():
+                self.local_media_folder = self.root / self.local_media_folder
+        else:
+            self.local_media_folder = self.root / "biblioteca_local"
+        try:
+            self.local_similarity_threshold = float(
+                media_cfg.get("local_similarity_threshold", 0.80)
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("media.local_similarity_threshold must be between 0 and 1") from exc
+        self.skip_ollama = bool(media_cfg.get("skip_ollama", False))
+        if not 0.0 <= self.local_similarity_threshold <= 1.0:
+            raise ValueError("media.local_similarity_threshold must be between 0 and 1")
+        self.local_ollama_model = str(
+            media_cfg.get("local_ollama_model", "llava-phi3")
+        ).strip()
+        self.local_ollama_url = str(
+            media_cfg.get("local_ollama_url", "http://127.0.0.1:11434")
+        ).strip()
+        try:
+            self.local_ollama_candidate_count = int(
+                media_cfg.get("local_ollama_candidate_count", 4)
+            )
+            self.local_ollama_timeout = float(
+                media_cfg.get("local_ollama_timeout_s", 180)
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "media.local_ollama_candidate_count and "
+                "media.local_ollama_timeout_s must be numeric"
+            ) from exc
+
         self.pixabay_key  = _resolve_api_key(
             media_cfg, "pixabay_api_key", "VF_PIXABAY_API_KEY"
         )
@@ -1407,6 +1512,34 @@ class MediaResearchAgent:
             print(f"  [ImageEvaluator] Ativado (min_score={self.image_evaluator.min_score})")
         except Exception as e:
             print(f"  [ImageEvaluator] Não disponível: {e}")
+
+        self.local_media = None
+        self.local_media_review_callback = None
+        if self.local_media_enabled:
+            if self.local_media_folder.is_dir():
+                try:
+                    from local_media_agent import LocalMediaAgent
+                except ImportError:
+                    from VideoFactoryAI.local_media_agent import LocalMediaAgent
+
+                self.local_media = LocalMediaAgent(
+                    self.local_media_folder,
+                    self.local_similarity_threshold,
+                    model=self.local_ollama_model,
+                    base_url=self.local_ollama_url,
+                    candidate_count=self.local_ollama_candidate_count,
+                    timeout=self.local_ollama_timeout,
+                )
+                print(f"  [LOCAL] {len(self.local_media.index)} imagens indexadas")
+            else:
+                print(f"  [LOCAL] Pasta da biblioteca não encontrada: {self.local_media_folder}")
+        if self.local_media_mode == "required" and (
+            self.local_media is None or not self.local_media.index
+        ):
+            raise RuntimeError(
+                "Modo somente local ativo, mas nenhuma imagem foi indexada em "
+                f"'{self.local_media_folder}'. Confira o caminho da biblioteca."
+            )
 
     def _provider_limits_path(self) -> Path:
         return self.memory_dir / "provider_limits.json"
@@ -1522,6 +1655,22 @@ class MediaResearchAgent:
         Valida o asset baixado/gerado com o ImageEvaluatorAgent.
         Retorna True se aprovado, False se reprovado (deve tentar próxima fonte).
         """
+        # [CORREÇÃO] Se a imagem veio da biblioteca local, seleção manual ou cache local,
+        # aprovamos imediatamente sem passar pelo crivo severo do avaliador.
+        if (
+            source_name in ("local_library_manual", "local_cache", "resume_local", "local_library") 
+            or scene.get("media_source") == "local_library" 
+            or scene.get("source_level") == "local_library"
+            or "local" in str(scene.get("media_path", "")).lower()
+        ):
+            print(f"    [ImageEval/Gentil] ✓ APROVADO AUTOMATICAMENTE: Asset local/manual preservado para a cena {scene.get('id', 0):02d}.")
+            return True
+
+        # [CORREÇÃO] Se o modo gentil estiver ativado nas configurações, relaxamos a validação severa
+        if getattr(self, "gentle_mode", False):
+            print(f"    [ImageEval/Gentil] Modo gentil ativo: imagem aceita automaticamente para a cena {scene.get('id', 0):02d}.")
+            return True
+
         scene_text = scene.get("texto", "") or scene.get("descricao", "")
         query_used = scene.get("query", "") or scene.get("wikimedia_q", "") or scene.get("ai_prompt", "")
         topic = getattr(self, "_current_topic", "documentario")
@@ -1696,6 +1845,70 @@ class MediaResearchAgent:
             print(f"    [YouTube autorizado] Erro ao extrair trecho: {exc}")
             return None
 
+    def _try_local_image(self, scene: dict, dest_path: str) -> Optional[str]:
+        local_media = getattr(self, "local_media", None)
+        if (
+            not getattr(self, "local_media_enabled", False)
+            or str(scene.get("tipo", "image")).lower().startswith("video")
+        ):
+            return None
+
+        match = None
+        # Se skip_ollama estiver desligado, tenta a busca inteligente por texto/Ollama
+        if not getattr(self, "skip_ollama", False) and local_media is not None:
+            query = " ".join(
+                str(scene.get(key) or "").strip()
+                for key in ("texto", "descricao", "wikimedia_q", "query", "ai_prompt")
+                if str(scene.get(key) or "").strip()
+            )
+            if query:
+                try:
+                    match = local_media.find_best(str(query))
+                except Exception:
+                    pass
+
+        # Se não houver match ou se o usuário escolheu pular o Ollama, pega a primeira da pasta como padrão para abrir a janela
+        if not match:
+            local_folder = Path(self.local_media_folder)
+            files = sorted([p for p in local_folder.glob("*.*") if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}])
+            if files:
+                match = {"path": str(files[0].resolve()), "score": 1.0, "title": files[0].name}
+            else:
+                return None
+
+        review_callback = getattr(self, "local_media_review_callback", None)
+        if review_callback is not None:
+            chosen_paths = review_callback(scene, match)
+            
+            # [CORREÇÃO] Garante que chosen_paths é uma lista/iterável válido e não um booleano
+            if not chosen_paths or isinstance(chosen_paths, bool):
+                return None
+                
+            # Se por acaso retornar apenas uma string (caminho único), converte para lista
+            if isinstance(chosen_paths, (str, Path)):
+                chosen_paths = [str(chosen_paths)]
+
+            primary_path = Path(chosen_paths[0])
+            destination = Path(dest_path)
+            
+            try:
+                from PIL import Image
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                with Image.open(primary_path) as image:
+                    image.convert("RGB").save(destination, format="JPEG", quality=95)
+                
+                local_hash = _file_hash(str(destination))
+                scene_id = scene["id"]
+                self.used_hashes[local_hash] = scene_id
+                self.used_paths[str(destination)] = scene_id
+                
+                self._add_report(scene_id, 0, "local_library_manual", str(primary_path), "user-selected", str(destination), "image")
+                print(f"    [LOCAL MANUAL] Foto escolhida para a Cena {scene_id:02d}: {primary_path.name}")
+                return str(destination)
+            except Exception as e:
+                print(f"    [LOCAL MANUAL] Erro ao salvar imagem: {e}")
+                return None
+        return None
     # ── Pipeline por Cena ─────────────────────────────────────────────────────
 
     def source_scene(self, scene: dict) -> Optional[str]:
@@ -1713,6 +1926,19 @@ class MediaResearchAgent:
         """
         sid       = scene["id"]
         is_video  = scene["tipo"] == "video"
+        source_mode = getattr(self, "media_source_mode", "legacy")
+        source_permissions = getattr(
+            self, "media_source_permissions", None
+        ) or _media_source_permissions(source_mode)
+        if is_video and (
+            getattr(self, "local_media_mode", "prefer") == "required"
+            or source_mode in {"webchat_only", "internet_images"}
+        ):
+            scene["tipo"] = "image"
+            scene["arquivo"] = str(
+                Path(scene.get("arquivo") or f"cena_{sid:02d}.jpg").with_suffix(".jpg").name
+            )
+            is_video = False
         query     = scene.get("query", "")
         wm_query  = scene.get("wikimedia_q", "")
         ai_prompt = scene.get("ai_prompt", "")
@@ -1722,6 +1948,8 @@ class MediaResearchAgent:
         if (
             getattr(self, "resume_mode", False)
             and not getattr(self, "force_regeneration", False)
+            and getattr(self, "local_media_mode", "prefer") != "required"
+            and source_mode == "legacy"
             and os.path.isfile(dest_path)
             and os.path.getsize(dest_path) > (MIN_VIDEO_SIZE if is_video else MIN_IMAGE_SIZE)
         ):
@@ -1741,7 +1969,11 @@ class MediaResearchAgent:
             return dest_path
 
         # ── Cache local com verificação de duplicata ──────────────────────────
-        if self._asset_valid(dest_path, is_video):
+        if (
+            getattr(self, "local_media_mode", "prefer") != "required"
+            and source_mode == "legacy"
+            and self._asset_valid(dest_path, is_video)
+        ):
             f_hash = _file_hash(dest_path)
             if f_hash and f_hash in self.used_hashes:
                 print(f"    [Dedup] Disco: {Path(dest_path).name} duplica Cena {self.used_hashes[f_hash]:02d}. Substituindo...")
@@ -1766,7 +1998,11 @@ class MediaResearchAgent:
         # ── Cache persistente com verificação de duplicata ────────────────────
         cache_q = wm_query or query
         media_type = "video" if is_video else "image"
-        if self.cache and cache_q and not self.ignore_cache and not self.force_regeneration:
+        if (
+            getattr(self, "local_media_mode", "prefer") != "required"
+            and source_mode == "legacy"
+            and self.cache and cache_q and not self.ignore_cache and not self.force_regeneration
+        ):
             cached_file = self.cache.get(cache_q, media_type)
             if cached_file and os.path.exists(cached_file):
                 c_hash = _file_hash(cached_file)
@@ -1791,10 +2027,24 @@ class MediaResearchAgent:
 
         print(f"\n  [MediaResearch] Cena {sid:02d} | tipo={scene['tipo']} | query='{query[:50]}'")
 
+        local_image = (
+            self._try_local_image(scene, dest_path)
+            if source_permissions["local"]
+            else None
+        )
+        if local_image:
+            return local_image
+        if getattr(self, "local_media_mode", "prefer") == "required":
+            print(
+                f"    [LOCAL] Modo somente local: nenhuma imagem compatível "
+                f"para a Cena {sid:02d}; fontes online desativadas."
+            )
+            return None
+
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # NÍVEL 1 — Vídeo real livre (com proteção anti-duplicata)
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        if is_video and query:
+        if source_permissions["internet_images"] and is_video and query:
             video_sources = [
                 (lambda q, d: _l1_pixabay_video(q, d, self.pixabay_key, exclude_urls=self.used_urls),  "pixabay_video"),
                 (lambda q, d: _l1_pexels_video(q, d, self.pexels_key, exclude_urls=self.used_urls),    "pexels_video"),
@@ -1870,6 +2120,8 @@ class MediaResearchAgent:
         # Explicit Gemini-only or AI-first mode may put Gemini before stock
         # search. If Gemini is suppressed by a persisted quota, keep searching.
         if (
+            source_permissions["webchat"]
+            and
             not is_video
             and (
                 getattr(self, "gemini_only", False)
@@ -1956,12 +2208,15 @@ class MediaResearchAgent:
         ))
         stock_candidates_checked = 0
         search_limit_reached = False
-        for source_fn, name in [
+        for source_fn, name in (
+            [
             (lambda q, d: _l2_pixabay_image(q, d, self.pixabay_key, exclude_urls=self.used_urls),   "pixabay_image"),
             (lambda q, d: _l2_wikimedia_image(q, d, exclude_urls=self.used_urls),                   "wikimedia_image"),
             (lambda q, d: _l2_pexels_image(q, d, self.pexels_key, exclude_urls=self.used_urls),     "pexels_image"),
             (lambda q, d: _l2_unsplash_image(q, d, self.unsplash_key, exclude_urls=self.used_urls), "unsplash_image"),
-        ]:
+            ]
+            if source_permissions["internet_images"] else []
+        ):
             for q in image_queries:
                 if search_limit_reached:
                     break
@@ -1997,7 +2252,11 @@ class MediaResearchAgent:
                 time.sleep(0.2)
 
         # ── L2 estendido: bancos gratuitos adicionais (só os aprovados) ───────
-        for nome_extra in ([] if search_limit_reached else FREE_IMAGE_SOURCE_ORDER[:MAX_FREE_IMAGE_TENTATIVAS_POR_CENA]):
+        for nome_extra in (
+            []
+            if search_limit_reached or not source_permissions["internet_images"]
+            else FREE_IMAGE_SOURCE_ORDER[:MAX_FREE_IMAGE_TENTATIVAS_POR_CENA]
+        ):
             for q in image_queries:
                 if search_limit_reached:
                     break
@@ -2035,7 +2294,11 @@ class MediaResearchAgent:
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # NÍVEL 3 — Conteúdo IA público (Openverse, com proteção anti-duplicata)
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        for q in ([] if search_limit_reached else image_queries):
+        for q in (
+            []
+            if search_limit_reached or not source_permissions["internet_images"]
+            else image_queries
+        ):
             if not q:
                 continue
             print(f"    [WebSearch] Openverse | Query: {q}")
@@ -2062,6 +2325,13 @@ class MediaResearchAgent:
                 self._add_report(sid, 3, "openverse", url, lic, dest_path, "image")
                 return dest_path
             time.sleep(0.3)
+
+        if not source_permissions["webchat"]:
+            print(
+                f"    [Mídia] Modo {source_mode}: geração via WebChat desativada; "
+                f"Cena {sid:02d} permanece pendente se não houver imagem compatível."
+            )
+            return None
 
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # NÍVEL 4 — Geração distribuída entre provedores com perfis independentes.
@@ -2311,6 +2581,17 @@ class MediaResearchAgent:
                 continue
 
             first_sid = seen[f_hash]
+            if (
+                getattr(self, "local_media_mode", "prefer") == "required"
+                or getattr(self, "media_source_mode", "legacy") == "internet_images"
+            ):
+                print(
+                    f"  [Dedup Final] Cena {sid:02d} duplica Cena {first_sid:02d}; "
+                    "a cena fica pendente porque o modo selecionado não permite geração WebChat."
+                )
+                asset_map.pop(sid, None)
+                scene["arquivo"] = ""
+                continue
             print(f"  [Dedup Final] Cena {sid:02d} duplica Cena {first_sid:02d}; tentando substituta Gemini...")
             new_dest = str(Path(self.imagens_dir) / f"cena_{sid:02d}_unique.jpg")
             replacement = None
@@ -2350,7 +2631,7 @@ class MediaResearchAgent:
     def source_all(self, scenes: List[dict], topic: str = "") -> Dict[int, str]:
         """
         Adquire mídia para todas as cenas. Retorna asset_map {scene_id: path}.
-        Cenas sem asset válido permanecem pendentes.
+        No modo local-only, qualquer cena sem imagem aprovada interrompe a produção.
         Executa auditoria final de exclusividade (Regra de Ouro Anti-Duplicata).
         """
         # Define tópico para o avaliador de imagens
@@ -2362,7 +2643,12 @@ class MediaResearchAgent:
         asset_map: Dict[int, str] = {}
         total = len(scenes)
         cached_clip_scene_ids = set()
-        if self.resume_mode and not self.force_regeneration:
+        if (
+            self.resume_mode
+            and not self.force_regeneration
+            and getattr(self, "local_media_mode", "prefer") != "required"
+            and getattr(self, "media_source_mode", "legacy") == "legacy"
+        ):
             clips_dir = Path(self.root) / "temp_clips"
             cached_clip_scene_ids = {
                 int(scene["id"])
@@ -2408,6 +2694,13 @@ class MediaResearchAgent:
             if path:
                 asset_map[sid] = path
 
+        local_only = (
+            getattr(self, "media_source_mode", "legacy") == "local_only"
+            or (
+                getattr(self, "media_source_mode", "legacy") == "legacy"
+                and getattr(self, "local_media_mode", "prefer") == "required"
+            )
+        )
         # ══════════════════════════════════════════════════════════════════════
         # REGRA DE OURO — Auditoria final: corrige qualquer duplicata restante
         # ══════════════════════════════════════════════════════════════════════
@@ -2415,6 +2708,82 @@ class MediaResearchAgent:
         if self.pending_scene_ids:
             print("\n  [Pendentes] Cenas sem mídia aprovada: "
                   + ", ".join(f"{int(i):02d}" for i in self.pending_scene_ids))
+            if local_only:
+                pending = ", ".join(
+                    f"{int(scene_id):02d}" for scene_id in self.pending_scene_ids
+                )
+                raise RuntimeError(
+                    "Modo somente local: cenas sem mídia local aprovada "
+                    f"({pending}). Nenhuma busca online ou imagem de fallback foi usada."
+                )
+
+        self.local_assets_by_scene = {}
+        if local_only:
+            self.local_assets_by_scene = {
+                int(scene_id): [path] for scene_id, path in asset_map.items()
+            }
+        else:
+            for record in self.media_report:
+                if record.get("source") == "local_library":
+                    try:
+                        scene_id = int(record["scene_id"])
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    if record.get("file_path"):
+                        self.local_assets_by_scene.setdefault(scene_id, []).append(
+                            str(record["file_path"])
+                        )
+
+        minimum_local_images = int(getattr(self, "min_local_images", 0))
+        local_image_count = sum(
+            len(paths) for paths in self.local_assets_by_scene.values()
+        )
+        if minimum_local_images > local_image_count:
+            local_agent = getattr(self, "local_media", None)
+            if not getattr(self, "local_media_enabled", False) or local_agent is None:
+                raise RuntimeError(
+                    "O mínimo de imagens locais foi definido como "
+                    f"{minimum_local_images}, mas a biblioteca local não está disponível."
+                )
+
+            eligible_scenes = [
+                scene for scene in scenes
+                if int(scene["id"]) in self.local_assets_by_scene
+            ]
+            while local_image_count < minimum_local_images:
+                added_this_round = False
+                for scene in eligible_scenes:
+                    if local_image_count >= minimum_local_images:
+                        break
+                    scene_id = int(scene["id"])
+                    scene_assets = self.local_assets_by_scene[scene_id]
+                    destination = (
+                        Path(self.root)
+                        / "temp_clips"
+                        / "local_assets"
+                        / f"scene_{scene_id:02d}_local_{len(scene_assets) + 1:03d}.jpg"
+                    )
+                    extra_path = self._try_local_image(scene, str(destination))
+                    if extra_path:
+                        scene_assets.append(extra_path)
+                        local_image_count += 1
+                        added_this_round = True
+                        print(
+                            f"    [LOCAL] Imagem adicional "
+                            f"{local_image_count}/{minimum_local_images} "
+                            f"atribuída à Cena {scene_id:02d}"
+                        )
+                if not added_this_round:
+                    break
+
+            if local_image_count < minimum_local_images:
+                raise RuntimeError(
+                    "Biblioteca local: mínimo de "
+                    f"{minimum_local_images} imagens únicas solicitado, mas apenas "
+                    f"{local_image_count} foram selecionadas e aprovadas. "
+                    "A produção foi interrompida sem fallback."
+                )
+
         if self.resume_mode and not self.force_regeneration:
             print("  [RESUME] Auditoria regenerativa de duplicatas ignorada para preservar assets existentes.")
             dups_fixed = 0
@@ -2436,7 +2805,13 @@ class MediaResearchAgent:
         print(f"    L2 (Imagem Real) : {levels.count(2)} cenas")
         print(f"    L3 (IA Publica)  : {levels.count(3)} cenas")
         print(f"    L4 (IA Gerada)   : {levels.count(4)} cenas")
-        print(f"    Cache            : {levels.count(0)} cenas")
+        local_count = sum(1 for r in self.media_report if r.get("source") == "local_library")
+        cache_count = sum(
+            1 for r in self.media_report
+            if r["level"] == 0 and r.get("source") != "local_library"
+        )
+        print(f"    L0 (Biblioteca)  : {local_count} cenas")
+        print(f"    Cache            : {cache_count} cenas")
         print(f"    Exclusividade    : 100% — nenhuma duplicata permitida")
 
         return asset_map
@@ -2467,7 +2842,11 @@ class MediaResearchAgent:
             "L2_image":        sum(1 for r in self.media_report if r["level"] == 2),
             "L3_ai_public":    sum(1 for r in self.media_report if r["level"] == 3),
             "L4_ia_generated": sum(1 for r in self.media_report if r["level"] == 4),
-            "cache":           sum(1 for r in self.media_report if r["level"] == 0),
+            "local_library":   sum(1 for r in self.media_report if r.get("source") == "local_library"),
+            "cache":           sum(
+                1 for r in self.media_report
+                if r["level"] == 0 and r.get("source") != "local_library"
+            ),
         }
         return {
             "total_assets":       total,

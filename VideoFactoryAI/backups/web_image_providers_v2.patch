@@ -1,0 +1,93 @@
+--- a/web_image_providers.py
++++ b/web_image_providers.py
+@@ -22,7 +22,7 @@
+     "copilot": {
+         "url": "https://copilot.microsoft.com/",
+         "profile": "copilot",
+-        "composers": ['textarea', 'div[contenteditable="true"]', '[role="textbox"]'],
++        "composers": ['textarea', '[contenteditable="true"]', '[role="textbox"]'],
+         "send": ['button[aria-label*="Submit"]', 'button[aria-label*="Send"]', 'button[aria-label*="Enviar"]'],
+     },
+     "dreamina": {
+@@ -40,6 +40,8 @@
+     "qwen": {
+         "url": "https://chat.qwen.ai/",
+         "profile": "qwen",
++        "abrir": ["Criar"],
++        "frases_sem_imagem": ["exhausted", "esgotad", "credits have been"],
+         "composers": ['textarea', 'div[contenteditable="true"]', '[role="textbox"]'],
+         "send": ['button[aria-label*="Send"]', 'button[aria-label*="Enviar"]'],
+     },
+@@ -269,6 +271,23 @@
+         except Exception: pass
+ 
+ 
++def _primeiro_visivel(page, sel: str):
++    """Entre os elementos que casam com o seletor, devolve o primeiro visível (ordem do DOM)."""
++    try:
++        loc = page.locator(sel)
++        n = min(loc.count(), 15)
++    except Exception:
++        return None
++    for i in range(n):
++        item = loc.nth(i)
++        try:
++            if item.is_visible(timeout=300):
++                return item
++        except Exception:
++            pass
++    return None
++
++
+ def _parece_imagem(data: bytes) -> bool:
+     return bool(data and len(data) >= MIN_BYTES and (
+         data.startswith(b"\xff\xd8") or data.startswith(b"\x89PNG\r\n\x1a\n")
+@@ -439,14 +458,18 @@
+         page=context.pages[0] if context.pages else context.new_page()
+         page.goto(os.environ.get(f"VF_{provider.upper()}_URL",cfg['url']),wait_until="domcontentloaded",timeout=60000)
+         page.wait_for_timeout(1800)
++        for txt_aba in cfg.get("abrir", []):
++            try:
++                alvo=page.get_by_text(txt_aba, exact=True).first
++                if alvo.is_visible(timeout=800):
++                    alvo.click(timeout=2000); page.wait_for_timeout(1500)
++            except Exception: pass
+         previous_sources = _image_src_snapshot(page)
+         previous_download_buttons = len(_download_buttons(page))
+         composer=None
+         for sel in cfg['composers']:
+-            try:
+-                loc=page.locator(sel).last
+-                if loc.count() and loc.is_visible(timeout=500): composer=loc; break
+-            except Exception: pass
++            composer=_primeiro_visivel(page, sel)
++            if composer is not None: break
+         if composer is None:
+             raise RuntimeError("Campo de prompt não encontrado; faça login ou a interface mudou.")
+         instruction=("Create/generate an original landscape image for a documentary scene. "
+@@ -455,6 +478,7 @@
+                      f"Video topic: {topic or 'unspecified'}\nScene {scene_id}: {prompt}\n"
+                      "Generate the actual image, not a textual description.")
+         composer.click(timeout=4000)
++        composer.evaluate("e => e.focus()")
+         page.keyboard.press("ControlOrMeta+A"); page.keyboard.press("Delete")
+         page.keyboard.insert_text(instruction)
+         lido=composer.evaluate("e => ((e.value ?? e.innerText) || '').trim()")
+@@ -463,10 +487,15 @@
+         sent=False
+         for sel in cfg['send']:
+             try:
+-                btn=page.locator(sel).last
+-                if btn.count() and btn.is_visible(timeout=300): btn.click(timeout=1800); sent=True; break
++                btn=_primeiro_visivel(page, sel)
++                if btn is not None: btn.click(timeout=1800); sent=True; break
+             except Exception: pass
+         if not sent: composer.press("Enter",timeout=2500)
++        if cfg.get("frases_sem_imagem"):
++            page.wait_for_timeout(8000)
++            corpo=(page.inner_text("body") or "").lower()
++            if any(f.lower() in corpo for f in cfg["frases_sem_imagem"]):
++                raise RuntimeError("o site respondeu só em texto, sem gerar imagem (créditos esgotados ou modo errado)")
+         timeout=max(45,int(os.environ.get("VF_WEB_IMAGE_TIMEOUT","180")))
+         deadline=time.monotonic()+timeout
+         data=None; previous_count=-1; stable=0

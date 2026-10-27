@@ -719,3 +719,185 @@ def pesquisar_fontes_web(topic: str, max_fontes: int = 6) -> List[Dict]:
         pass
     
     return fontes[:max_fontes]
+
+
+# =============================================================================
+# FUNÇÕES PARA USAR O GEM @roteiroparavideos (GEMINI PERSONALIZADO)
+# =============================================================================
+
+def montar_prompt_gem(topic: str, duration_min: float) -> str:
+    """
+    Monta prompt no formato do Gem @roteiroparavideos.
+    
+    O Gem já tem instruções internas de:
+    - Gerar roteiro documental completo
+    - Definir cenas com timestamps, visuais e durações
+    - Gerar narração única (locução completa)
+    
+    Formato de saída do Gem:
+      PARTE 1: Estrutura de cenas (timestamps + visual + duração)
+      PARTE 2: Texto único de narração
+    """
+    return f"@roteiroparavideos {topic} — Duração alvo: {duration_min:.0f} minutos"
+
+
+def escrever_via_webchat_gem(
+    topic: str,
+    duration_min: float,
+    target_words: int,
+    roteiros_dir: Path,
+    slug: str,
+    log=print,
+    min_words: int = 0,
+) -> Dict:
+    """
+    Usa o Gem @roteiroparavideos para gerar roteiro + cenas + narração.
+    
+    Retorna dict com:
+      - "titulo": str
+      - "cenas": List[Dict] (formato pipeline)
+      - "narracao": str (texto para TTS)
+      - "narracao_completa": str (inclui CTA)
+      - "roteiro_bruto": str (saída completa do Gem)
+      - "site": str (qual site respondeu)
+    """
+    from gem_roteiro_parser import parse_gem_output, gem_para_cenas_pipeline, validar_roteiro_gem
+    
+    # Verifica se existe resposta manual colada
+    manual = roteiros_dir / f"{slug}_resposta.txt"
+    if manual.exists() and manual.read_text(encoding="utf-8").strip():
+        log(f"  [Gem] Usando resposta colada manualmente: {manual.name}")
+        texto_bruto = manual.read_text(encoding="utf-8")
+    else:
+        # Monta prompt simples para o Gem
+        prompt = montar_prompt_gem(topic, duration_min)
+        prompt_path = roteiros_dir / f"{slug}_prompt.txt"
+        prompt_path.write_text(prompt, encoding="utf-8")
+        
+        try:
+            ask_web = _carregar_ask_web()
+        except Exception as e:
+            raise WebChatError(
+                f"webchat_bridge não carregou ({e}). "
+                f"Cole o conteúdo de {prompt_path.name} no Gemini com @roteiroparavideos, "
+                f"copie a resposta e salve em {manual}."
+            )
+        
+        sites = [s.strip() for s in os.getenv("VF_WEBCHAT_SITES", "gemini").split(",") if s.strip()]
+        # Prioriza gemini para usar o Gem
+        if "gemini" in sites:
+            sites.remove("gemini")
+            sites.insert(0, "gemini")
+        
+        validar = os.getenv("VF_WEBCHAT_VALIDAR", "nenhum").strip().lower()
+        if validar in ("nenhum", ""):
+            validar = None
+        
+        log(f"  [Gem] Enviando prompt para: {', '.join(sites)}")
+        log(f"  [Gem] Prompt: {prompt}")
+        
+        max_tentativas = 3
+        texto_bruto = None
+        site_respondeu = "?"
+        
+        for tentativa in range(1, max_tentativas + 1):
+            try:
+                resultado = ask_web(prompt, order=sites, interactive=True, fallback_local=False, validar=validar)
+            except Exception as e:
+                if tentativa == max_tentativas:
+                    raise WebChatError(
+                        f"Falha no web chat após {max_tentativas} tentativas ({e}). "
+                        f"Cole manualmente em {manual}"
+                    )
+                log(f"  [Gem] Tentativa {tentativa} falhou: {e}. Tentando próximo site...")
+                continue
+            
+            texto = _limpar_ui(str(resultado.get("answer", "") or ""))
+            site_respondeu = resultado.get("site", "?")
+            
+            if not texto:
+                if tentativa == max_tentativas:
+                    raise WebChatError(f"Resposta vazia do site {site_respondeu}. Cole manualmente em {manual}")
+                log(f"  [Gem] Resposta vazia de {site_respondeu}, tentando próximo...")
+                continue
+            
+            texto_bruto = texto
+            break
+        
+        if not texto_bruto:
+            raise WebChatError(f"Não foi possível obter resposta do Gem. Cole manualmente em {manual}")
+        
+        # Salva resposta bruta para auditoria
+        (roteiros_dir / f"{slug}_webchat_bruto.txt").write_text(
+            f"[site: {site_respondeu}]\n{texto_bruto}", encoding="utf-8"
+        )
+    
+    # Parse da saída do Gem
+    log(f"  [Gem] Fazendo parse da saída ({len(texto_bruto)} chars)...")
+    roteiro_gem = parse_gem_output(texto_bruto)
+    
+    # Valida
+    ok, msg = validar_roteiro_gem(roteiro_gem, min_words)
+    if not ok:
+        raise WebChatError(f"Roteiro do Gem inválido: {msg}")
+    
+    log(f"  [Gem] ✓ Roteiro validado: {msg}")
+    log(f"  [Gem]   Título: {roteiro_gem.titulo}")
+    log(f"  [Gem]   Cenas: {len(roteiro_gem.cenas)}")
+    log(f"  [Gem]   Narração: {len(roteiro_gem.narracao_para_tts.split())} palavras")
+    
+    # Converte cenas para formato do pipeline
+    cenas_pipeline = gem_para_cenas_pipeline(roteiro_gem, topic)
+    log(f"  [Gem]   Cenas convertidas para pipeline: {len(cenas_pipeline)}")
+    
+    # Salva dados processados
+    dados = {
+        "titulo": roteiro_gem.titulo,
+        "cenas": cenas_pipeline,
+        "narracao": roteiro_gem.narracao_para_tts,
+        "narracao_completa": roteiro_gem.narracao_completa,
+        "roteiro_bruto": texto_bruto,
+        "site": site_respondeu if 'site_respondeu' in dir() else "manual",
+        "duracao_total_min": roteiro_gem.duracao_total_min,
+        "total_cenas": len(roteiro_gem.cenas),
+    }
+    
+    # Salva JSON processado
+    import json
+    dados_path = roteiros_dir / f"{slug}_gem_dados.json"
+    dados_path.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
+    log(f"  [Gem] Dados salvos em: {dados_path.name}")
+    
+    # Salva narração separadamente para TTS
+    narracao_path = roteiros_dir / f"{slug}_narracao.txt"
+    narracao_path.write_text(roteiro_gem.narracao_para_tts, encoding="utf-8")
+    log(f"  [Gem] Narração salva em: {narracao_path.name}")
+    
+    # Salva narração com CTA
+    narracao_cta_path = roteiros_dir / f"{slug}_narracao_completa.txt"
+    narracao_cta_path.write_text(roteiro_gem.narracao_completa, encoding="utf-8")
+    
+    return dados
+
+
+def gerar_roteiro_gem(
+    topic: str,
+    duration_min: float,
+    target_words: int,
+    roteiros_dir: Path,
+    slug: str,
+    log=print,
+    min_words: int = 0,
+) -> str:
+    """
+    Função wrapper que usa o Gem e retorna APENAS a narração (texto puro).
+    
+    Compatível com a assinatura esperada pelo agent.py.
+    O JSON completo com cenas fica salvo em <slug>_gem_dados.json.
+    """
+    dados = escrever_via_webchat_gem(
+        topic, duration_min, target_words, roteiros_dir, slug, log, min_words
+    )
+    
+    # Retorna narração completa (com CTA) como texto principal
+    return dados["narracao_completa"]
