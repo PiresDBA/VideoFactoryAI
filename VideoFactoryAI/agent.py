@@ -2350,7 +2350,12 @@ LOCAL_MEDIA_REVIEW_MARKER = "__LOCAL_MEDIA_REVIEW__"
 
 
 def _request_local_media_review(scene: dict, candidate: dict):
-    """Request a manual decision over stdin; the desktop GUI renders the image."""
+    """Request a manual decision over stdin; the desktop GUI renders the image.
+    
+    Returns:
+        bool: True if approved, False if rejected (simple mode)
+        list: List of selected image paths (multiple selection mode)
+    """
     review = {
         "scene_id": scene.get("id"),
         "scene_text": str(
@@ -2371,11 +2376,31 @@ def _request_local_media_review(scene: dict, candidate: dict):
             f"{review['image_title']} (score={review['score']:.3f})\n"
             f"Imagem: {review['image_path']}\n"
             f"Trecho: {review['scene_text']}\n"
-            "Digite 'aprovar' ou 'rejeitar': ",
+            "Digite 'aprovar' ou 'rejeitar' (ou cole caminhos separados por ';'): ",
             end="",
             flush=True,
         )
-    answer = sys.stdin.readline().strip().casefold()
+    answer = sys.stdin.readline().strip()
+    
+    # Check if answer is a JSON array (multiple selection from GUI)
+    if answer.startswith('[') and answer.endswith(']'):
+        try:
+            paths = json.loads(answer)
+            if isinstance(paths, list) and paths:
+                print(f"    [REVIEW] Recebidas {len(paths)} fotos selecionadas para Cena {review['scene_id']}", flush=True)
+                return paths
+        except json.JSONDecodeError:
+            pass  # Fall through to simple approve/reject
+    
+    # Check for multiple paths separated by semicolons (terminal mode)
+    if ';' in answer:
+        paths = [p.strip() for p in answer.split(';') if p.strip()]
+        if paths:
+            print(f"    [REVIEW] Recebidas {len(paths)} fotos selecionadas para Cena {review['scene_id']}", flush=True)
+            return paths
+    
+    # Simple approve/reject
+    answer = answer.casefold()
     if answer in {"approve", "aprovar", "a", "yes", "y"}:
         return True
     if answer in {"reject", "rejeitar", "r", "no", "n"}:
@@ -2383,7 +2408,7 @@ def _request_local_media_review(scene: dict, candidate: dict):
     if not answer:
         raise RuntimeError("A revisão manual de mídia local foi encerrada sem resposta.")
     raise RuntimeError(
-        "Resposta inválida na revisão local; use 'aprovar' ou 'rejeitar'."
+        "Resposta inválida na revisão local; use 'aprovar', 'rejeitar' ou JSON array."
     )
 
 
