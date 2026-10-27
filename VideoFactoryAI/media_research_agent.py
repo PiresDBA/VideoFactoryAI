@@ -1480,6 +1480,9 @@ class MediaResearchAgent:
 
         self.media_report: List[Dict] = []
         self._source_stats: Dict[str, int] = {}
+        
+        # Armazenamento de múltiplas fotos por cena (para suporte a múltiplas imagens)
+        self.local_assets_by_scene: Dict[int, List[str]] = {}
 
         # ══════════════════════════════════════════════════════════════════════
         # REGRA DE OURO — PROIBIÇÃO DE MÍDIA DUPLICADA
