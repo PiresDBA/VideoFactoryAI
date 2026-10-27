@@ -993,9 +993,11 @@ class VideoFactoryGUI(tk.Tk):
             if self.proc and self.proc.poll() is None:
                 self.proc.terminate()
 
-    def _show_local_media_review(self, request: dict) -> list | str:
+    def _show_local_media_review(self, request: dict) -> list:
+        """Mostra diálogo de seleção múltipla de imagens com busca e grade de miniaturas."""
         from PIL import Image, ImageTk
-
+        import unicodedata
+        
         suggested_path = request.get("image_path", "")
         folder_path = Path(suggested_path).parent if suggested_path else Path(self.local_media_folder.get())
 
@@ -1009,112 +1011,311 @@ class VideoFactoryGUI(tk.Tk):
         if not all_image_files and suggested_path:
             all_image_files = [suggested_path]
 
+        # Sugerir a imagem do candidato como primeira
         if suggested_path in all_image_files:
             all_image_files.remove(suggested_path)
             all_image_files.insert(0, suggested_path)
 
-        candidates_list = [
-            {"image_path": img_path, "title": Path(img_path).name}
-            for img_path in all_image_files
-        ]
-
-        current_index = {"idx": 0}
-        selected_paths = []
-
+        # Estado da seleção
+        selected_paths = set()
+        filtered_indices = list(range(len(all_image_files)))  # Índices das imagens filtradas
+        
+        # Criar diálogo principal
         dialog = tk.Toplevel(self)
-        dialog.title(f"Revisar/Selecionar Imagens — Cena {request['scene_id']}")
+        dialog.title(f"Selecionar Imagens — Cena {request['scene_id']} ({len(all_image_files)} fotos)")
         dialog.transient(self)
-        dialog.geometry("950x880")
-        dialog.minsize(700, 600)
+        dialog.geometry("1200x900")
+        dialog.minsize(1000, 700)
         dialog.grab_set()
+        
+        # Configurar grid principal
+        dialog.grid_rowconfigure(2, weight=1)
+        dialog.grid_columnconfigure(0, weight=1)
 
-        header_label = ttk.Label(dialog, font=("Segoe UI Semibold", 11), foreground="#67d7bd")
-        header_label.pack(fill="x", padx=14, pady=(14, 8))
+        # ══════════════════════════════════════════════════════════════════
+        # CABEÇALHO COM INFORMAÇÕES
+        # ══════════════════════════════════════════════════════════════════
+        header_frame = ttk.Frame(dialog)
+        header_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
+        
+        ttk.Label(
+            header_frame, 
+            text=f"Cena {request['scene_id']} — Selecione múltiplas imagens",
+            font=("Segoe UI Semibold", 12)
+        ).pack(side="left")
+        
+        selected_label = ttk.Label(
+            header_frame,
+            text="Selecionadas: 0",
+            font=("Segoe UI Semibold", 11),
+            foreground="#67d7bd"
+        )
+        selected_label.pack(side="right")
 
-        image_label = ttk.Label(dialog, anchor="center")
-        image_label.pack(fill="both", expand=True, padx=14, pady=6)
-
-        nav_frame = ttk.Frame(dialog)
-        nav_frame.pack(fill="x", padx=14, pady=5)
-
-        def update_view():
-            if not candidates_list:
-                return
-            idx = current_index["idx"]
-            cand = candidates_list[idx]
-            image_path = Path(cand["image_path"])
+        # ══════════════════════════════════════════════════════════════════
+        # BARRA DE BUSCA E CONTROLES
+        # ══════════════════════════════════════════════════════════════════
+        search_frame = ttk.Frame(dialog)
+        search_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=5)
+        
+        ttk.Label(search_frame, text="🔍 Buscar:").pack(side="left")
+        
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_frame, textvariable=search_var, width=40)
+        search_entry.pack(side="left", padx=(5, 10))
+        
+        # Função para normalizar texto (remover acentos)
+        def normalize_text(text):
+            text = unicodedata.normalize('NFKD', text)
+            text = ''.join(c for c in text if not unicodedata.combining(c))
+            return text.lower()
+        
+        # Função de busca
+        def update_filter(*args):
+            nonlocal filtered_indices
+            search_text = normalize_text(search_var.get().strip())
             
-            status_sel = " [✔ SELECIONADA PARA ESTA CENA]" if str(image_path) in selected_paths else ""
-            header_label.config(
-                text=f"Cena {request['scene_id']} · Foto {idx + 1} de {len(candidates_list)} · "
-                     f"Arquivo: {image_path.name}{status_sel}"
+            if not search_text:
+                filtered_indices = list(range(len(all_image_files)))
+            else:
+                filtered_indices = []
+                for idx, img_path in enumerate(all_image_files):
+                    filename = normalize_text(Path(img_path).stem)
+                    if search_text in filename:
+                        filtered_indices.append(idx)
+            
+            update_status()
+            rebuild_grid()
+        
+        search_var.trace_add("write", update_filter)
+        
+        # Botões de ação em lote
+        ttk.Button(
+            search_frame, 
+            text="✅ Selecionar Todas Visíveis",
+            command=lambda: select_visible(True)
+        ).pack(side="left", padx=2)
+        
+        ttk.Button(
+            search_frame, 
+            text="❌ Limpar Seleção",
+            command=lambda: select_visible(False)
+        ).pack(side="left", padx=2)
+        
+        ttk.Label(search_frame, text=f"  |  Total: {len(all_image_files)} fotos").pack(side="left", padx=10)
+
+        # ══════════════════════════════════════════════════════════════════
+        # ÁREA DE MINIATURAS (SCROLLABLE)
+        # ══════════════════════════════════════════════════════════════════
+        canvas_frame = ttk.Frame(dialog)
+        canvas_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=5)
+        
+        # Canvas com scrollbar
+        canvas = tk.Canvas(canvas_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Suporte a scroll com mouse
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Cache de miniaturas
+        thumbnail_cache = {}
+        THUMB_SIZE = (180, 135)
+        COLS = 5  # Número de colunas na grade
+
+        def load_thumbnail(img_path):
+            """Carrega e retorna miniatura da imagem."""
+            if img_path in thumbnail_cache:
+                return thumbnail_cache[img_path]
+            
+            try:
+                with Image.open(img_path) as img:
+                    img.thumbnail(THUMB_SIZE, Image.Resampling.LANCZOS)
+                    thumb = ImageTk.PhotoImage(img.convert("RGB"), master=dialog)
+                    thumbnail_cache[img_path] = thumb
+                    return thumb
+            except Exception:
+                return None
+
+        def rebuild_grid():
+            """Reconstrói a grade de miniaturas."""
+            # Limpar grade anterior
+            for widget in scrollable_frame.winfo_children():
+                widget.destroy()
+            
+            if not filtered_indices:
+                ttk.Label(
+                    scrollable_frame, 
+                    text="Nenhuma imagem encontrada para a busca.",
+                    font=("Segoe UI", 11)
+                ).grid(row=0, column=0, columnspan=COLS, pady=50)
+                return
+            
+            # Criar miniaturas
+            for pos, idx in enumerate(filtered_indices):
+                row = pos // COLS
+                col = pos % COLS
+                
+                img_path = all_image_files[idx]
+                img_name = Path(img_path).name
+                
+                # Frame para cada miniatura
+                thumb_frame = ttk.Frame(scrollable_frame, relief="solid", borderwidth=1)
+                thumb_frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+                
+                # Variável para checkbox
+                is_selected = tk.BooleanVar(value=img_path in selected_paths)
+                
+                # Função para toggle seleção
+                def toggle_selection(path=img_path, var=is_selected):
+                    if var.get():
+                        selected_paths.add(path)
+                    else:
+                        selected_paths.discard(path)
+                    update_status()
+                    update_thumb_border(thumb_frame, var.get())
+                
+                # Checkbox
+                chk = ttk.Checkbutton(
+                    thumb_frame, 
+                    variable=is_selected,
+                    command=toggle_selection
+                )
+                chk.pack(pady=(5, 0))
+                
+                # Miniatura
+                thumb_img = load_thumbnail(img_path)
+                if thumb_img:
+                    thumb_label = ttk.Label(thumb_frame, image=thumb_img)
+                    thumb_label.image = thumb_img  # Manter referência
+                    thumb_label.pack(pady=5)
+                else:
+                    ttk.Label(thumb_frame, text="[Erro ao\ncarregar]", width=20).pack(pady=20)
+                
+                # Nome do arquivo (truncado)
+                display_name = img_name[:25] + "..." if len(img_name) > 25 else img_name
+                ttk.Label(
+                    thumb_frame, 
+                    text=display_name,
+                    font=("Segoe UI", 7),
+                    wraplength=170
+                ).pack(pady=(0, 5))
+                
+                # Atualizar borda baseado no estado inicial
+                update_thumb_border(thumb_frame, is_selected.get())
+            
+            # Configurar expansão das colunas
+            for col in range(COLS):
+                scrollable_frame.columnconfigure(col, weight=1)
+
+        def update_thumb_border(frame, selected):
+            """Atualiza a borda do frame baseado no estado de seleção."""
+            if selected:
+                frame.configure(relief="solid", borderwidth=3)
+            else:
+                frame.configure(relief="solid", borderwidth=1)
+
+        def select_visible(select):
+            """Seleciona ou desseleciona todas as imagens visíveis."""
+            for idx in filtered_indices:
+                img_path = all_image_files[idx]
+                if select:
+                    selected_paths.add(img_path)
+                else:
+                    selected_paths.discard(img_path)
+            
+            update_status()
+            rebuild_grid()
+
+        def update_status():
+            """Atualiza o contador de seleção."""
+            selected_label.config(
+                text=f"Selecionadas: {len(selected_paths)} / {len(all_image_files)}"
             )
 
-            if image_path.is_file():
-                with Image.open(image_path) as source:
-                    source.thumbnail((850, 400), Image.Resampling.LANCZOS)
-                    preview = source.convert("RGB")
-                    photo = ImageTk.PhotoImage(preview, master=dialog)
-                    image_label.configure(image=photo)
-                    image_label.image = photo
-            else:
-                image_label.configure(image="")
-                image_label.image = None
+        # ══════════════════════════════════════════════════════════════════
+        # TEXTO DO ROTEIRO (COLAPSÁVEL)
+        # ══════════════════════════════════════════════════════════════════
+        scene_text = str(request.get("scene_text", ""))
+        if scene_text:
+            text_frame = ttk.LabelFrame(dialog, text="Trecho do Roteiro", padding=5)
+            text_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
+            
+            text_widget = tk.Text(
+                text_frame, height=3, wrap="word",
+                background=self.palette.get("field", "#2b2b2b"),
+                foreground=self.palette.get("text", "#ffffff")
+            )
+            text_widget.pack(fill="x")
+            text_widget.insert("1.0", scene_text[:300] + ("..." if len(scene_text) > 300 else ""))
+            text_widget.configure(state="disabled")
 
-        def go_prev():
-            current_index["idx"] = (current_index["idx"] - 1) % len(candidates_list)
-            update_view()
-
-        def go_next():
-            current_index["idx"] = (current_index["idx"] + 1) % len(candidates_list)
-            update_view()
-
-        ttk.Button(nav_frame, text="⬅ Foto Anterior", command=go_prev).pack(side="left")
-        ttk.Button(nav_frame, text="Próxima Foto ➔", command=go_next).pack(side="left", padx=10)
-
-        # Roteiro
-        ttk.Label(dialog, text="Trecho do roteiro desta cena:", font=("Segoe UI Semibold", 10)).pack(anchor="w", padx=14, pady=(8, 3))
-        text_frame = ttk.Frame(dialog)
-        text_frame.pack(fill="both", expand=False, padx=14, pady=(0, 8))
-        scene_text = tk.Text(text_frame, height=4, wrap="word", background=self.palette["field"], foreground=self.palette["text"])
-        text_scroll = ttk.Scrollbar(text_frame, orient="vertical", command=scene_text.yview)
-        scene_text.configure(yscrollcommand=text_scroll.set)
-        scene_text.pack(side="left", fill="both", expand=True)
-        text_scroll.pack(side="right", fill="y")
-        scene_text.insert("1.0", str(request.get("scene_text", "")))
-        scene_text.configure(state="disabled")
-
-        def add_current_photo():
-            path_str = candidates_list[current_index["idx"]]["image_path"]
-            if path_str not in selected_paths:
-                selected_paths.append(path_str)
-            update_view()
-
-        def remove_current_photo():
-            path_str = candidates_list[current_index["idx"]]["image_path"]
-            if path_str in selected_paths:
-                selected_paths.remove(path_str)
-            update_view()
-
-        add_frame = ttk.Frame(dialog)
-        add_frame.pack(fill="x", padx=14, pady=5)
-        ttk.Button(add_frame, text="➕ Adicionar esta foto à cena (Múltiplas)", command=add_current_photo).pack(side="left")
-        ttk.Button(add_frame, text="❌ Remover esta foto da cena", command=remove_current_photo).pack(side="left", padx=10)
-
-        actions = ttk.Frame(dialog)
-        actions.pack(fill="x", padx=14, pady=(5, 14))
-
+        # ══════════════════════════════════════════════════════════════════
+        # BOTÕES DE AÇÃO
+        # ══════════════════════════════════════════════════════════════════
+        actions_frame = ttk.Frame(dialog)
+        actions_frame.grid(row=4, column=0, sticky="ew", padx=10, pady=(5, 10))
+        
         def finish_selection():
-            if not selected_paths and candidates_list:
-                selected_paths.append(candidates_list[current_index["idx"]]["image_path"])
+            """Conclui seleção e retorna paths."""
             dialog.destroy()
+        
+        def cancel_selection():
+            """Cancela e retorna lista vazia."""
+            selected_paths.clear()
+            dialog.destroy()
+        
+        ttk.Button(
+            actions_frame,
+            text="❌ Cancelar",
+            command=cancel_selection
+        ).pack(side="left")
+        
+        finish_btn = ttk.Button(
+            actions_frame,
+            text=f"✔ Concluir e Usar Selecionadas (0)",
+            command=finish_selection
+        )
+        finish_btn.pack(side="right")
+        
+        # Atualizar texto do botão quando seleção mudar
+        def update_finish_button():
+            finish_btn.config(text=f"✔ Concluir e Usar Selecionadas ({len(selected_paths)})")
+            dialog.after(100, update_finish_button)
+        update_finish_button()
 
-        ttk.Button(actions, text="Concluir e Usar Selecionadas ➔", command=finish_selection).pack(side="right")
-
-        update_view()
-        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+        # ══════════════════════════════════════════════════════════════════
+        # INICIALIZAÇÃO
+        # ══════════════════════════════════════════════════════════════════
+        update_status()
+        rebuild_grid()
+        
+        # Focar no campo de busca
+        search_entry.focus_set()
+        
+        # Fechar com ESC
+        dialog.bind("<Escape>", lambda e: cancel_selection())
+        
+        dialog.protocol("WM_DELETE_WINDOW", cancel_selection)
         self.wait_window(dialog)
-        return selected_paths
+        
+        # Remover binding do mousewheel
+        canvas.unbind_all("<MouseWheel>")
+        
+        return list(selected_paths)
     
     def _append_log(self, value: str) -> None:
         self.log_text.configure(state="normal")
