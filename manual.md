@@ -1,6 +1,6 @@
 # 📘 Manual do Usuário — VideoFactoryAI
 
-> **Versão:** 3.8<br>
+> **Versão:** 3.11<br>
 > **Data:** Outubro 2026
 > **Local do projeto:** C:\Fabrica-de-videos\VideoFactoryAI  
 > **Público-alvo:** Desenvolvedores, operadores de sistema e gestores de projeto  
@@ -427,6 +427,129 @@ media:
 
 `media_source_mode` aceita `local_only`, `local_then_online`, `webchat_only` e `internet_images`, com a mesma seleção disponível na tela inicial da GUI. O caminho da biblioteca pode ser absoluto ou relativo ao workspace da produção; a GUI carrega o padrão do `config.yaml` e permite escolher outra pasta. `local_media_mode` aceita `off`, `prefer` e `required` para compatibilidade com configurações anteriores. Configure `local_ollama_model`, `local_ollama_url`, `local_ollama_candidate_count` e `local_ollama_timeout_s` em `media`; por segurança, a URL só aceita o serviço local (`localhost` ou loopback HTTP). Os títulos dos arquivos em português formam uma shortlist de até quatro imagens, e apenas essas candidatas são enviadas ao modelo local, junto ao texto, à descrição e à consulta planejada para a cena. A escolha precisa atingir `local_similarity_threshold`; a nota Ollama de 0 a 10 é normalizada para 0 a 1. Na GUI, **Revisar imagens locais abaixo do limiar** permite aprovar manualmente uma candidata que não atingiu a nota; ao rejeitar, ela é excluída apenas da cena atual e a próxima candidata é apresentada. Desative a opção para não revisar candidatos abaixo do limiar; no modo somente local, cenas sem correspondência interrompem a produção. Nenhuma decisão move ou altera as imagens originais. As imagens aceitas são convertidas para JPEG no destino da cena. O relatório identifica a origem local, mas cabe ao usuário confirmar que possui os direitos de uso.
 
+#### Revisão Manual de Mídia Local (v3.9+)
+
+Agora é possível revisar e selecionar **múltiplas imagens por cena** na GUI antes do vídeo ser gerado. Esta funcionalidade foi aprimorada para oferecer:
+
+**Novas Funcionalidades da GUI (v3.11+):**
+
+1. **🔍 Campo de Busca com Filtro em Tempo Real**
+   - Digite no campo "Buscar" para filtrar imagens pelo nome
+   - **Busca sem acentos**: "locomotiva" encontra "locomotíva"
+   - Filtro atualiza instantaneamente enquanto você digita
+   - Ideal para bibliotecas com 200+ fotos
+
+2. **🖼️ Grade de Miniaturas (5 colunas)**
+   - Visualize múltiplas imagens de uma vez
+   - Miniaturas de 180x135 pixels
+   - Scroll com mouse wheel para navegação rápida
+   - Muito mais eficiente que visão única
+
+3. **☑️ Seleção Múltipla com Checkboxes**
+   - Cada miniatura tem checkbox para seleção
+   - Feedback visual: imagens selecionadas ficam com borda grossa
+   - Contador em tempo real: "Selecionadas: X / Total"
+
+4. **⚡ Botões de Ação em Lote**
+   - "✅ Selecionar Todas Visíveis": Seleciona todas as imagens filtradas
+   - "❌ Limpar Seleção": Desmarca todas as imagens
+   - "✔ Concluir e Usar Selecionadas (X)": Mostra quantas fotos serão usadas
+
+**Como Usar:**
+
+1. Ative a opção "Revisar mídias locais na GUI" nas configurações
+2. Execute o pipeline
+3. Para cada cena, a GUI abrirá com grade de miniaturas
+4. Use o campo de busca para filtrar (ex: "locomotiva", "trilho", "bancada")
+5. Selecione múltiplas fotos com checkboxes
+6. Clique em "Concluir e Usar Selecionadas"
+
+**Exemplo Prático (Cena com 200+ fotos):**
+
+ANTES (lento):
+- Olhar 200 fotos uma por uma
+- Clicar "Próxima Foto" 50 vezes até achar
+- Tempo: 2-5 minutos por cena
+
+AGORA (rápido):
+1. Digitar "locomotiva" na busca → mostra 30 fotos
+2. Clicar em 3 checkboxes das melhores
+3. Clicar "Concluir" → pronto em segundos
+
+**Suporte a Múltiplas Imagens por Cena (v3.10+):**
+
+Agora é possível usar múltiplas imagens em uma única cena:
+
+- **Seleção**: Marque quantas fotos quiser para cada cena
+- **Processamento**: Cada foto é processada individualmente com Ken Burns
+- **Concatenação**: Clipes são unidos automaticamente
+- **Duração**: Tempo da cena é dividido igualmente entre todas as fotos
+
+Exemplo: Cena de 10 segundos com 3 fotos:
+- Foto 1: 3.3s com zoom in
+- Foto 2: 3.3s com pan left
+- Foto 3: 3.3s com zoom out
+- Transições suaves entre elas
+
+**Importante: Limpar Cache Antes de Testar**
+
+Se você já tem clips antigos em cache, serão reutilizados! Para forçar regeneração:
+
+```powershell
+# Navegue até o diretório do projeto
+cd C:\Fabrica-de-videos\projetos\<seu-projeto>\temp_clips
+
+# Delete todos os clips
+Remove-Item -Path "clip_*.mp4" -Force
+```
+
+Ou use o script utilitário:
+```bash
+C:\Docling\venv\Scripts\python.exe C:\Fabrica-de-videos\VideoFactoryAI\clear_clip_cache.py
+```
+
+**Opção "Pular Ollama" (--skip-ollama)**
+
+Quando ativado, o sistema pula a análise do Ollama e vai direto para a GUI:
+
+ANTES: Ollama analisa cena → busca imagem → GUI mostra sugestão → usuário aprova/rejeita
+AGORA: GUI abre direto → usuário busca e seleciona fotos → pronto
+
+Benefícios:
+- Mais rápido (sem chamada ao Ollama)
+- Controle total do usuário
+- Não precisa ter Ollama instalado
+
+Como ativar:
+```bash
+python agent.py --skip-ollama --review-local-media
+```
+
+**Tradução Automática para Português (v3.11+)**
+
+O sistema traduz automaticamente termos do roteiro para português para melhorar a busca:
+
+| Termo em Inglês | Tradução em Português |
+|----------------|----------------------|
+| model railroad | ferromodelismo |
+| locomotive | locomotiva |
+| train | trem |
+| track | trilho |
+| station | estação |
+| bridge | ponte |
+| tunnel | túnel |
+| landscape | paisagem |
+| aerial view | vista aérea |
+
+Dica: Nomeie suas fotos com termos em português para melhorar a busca!
+
+**Comportamento do "Mínimo de Imagens" com Revisão Manual**
+
+Quando revisão manual está ativa:
+- Sistema ignora `min_local_images`
+- Usuário pode selecionar 0, 1, 5 ou 20 fotos por cena
+- Sistema não força seleção mínima
+
 `min_local_images` (ou `--min-local-images`) define uma quantidade mínima de imagens locais únicas para o vídeo. O valor `0` mantém o comportamento de uma imagem por cena; por exemplo, `150` reparte no mínimo 150 imagens em cortes dentro das cenas existentes, sem criar novas cenas de narração. Em `local_only`, a produção é interrompida se não houver imagens suficientes aprovadas ou se alguma cena ficar sem imagem — nunca completa o vídeo com internet ou cartões de fallback. A GUI oferece o campo **Mínimo de imagens locais únicas**.
 
 Configuração Ollama:
@@ -442,6 +565,23 @@ media:
 ### Passo 6: Processamento Visual
 
 Cada imagem passa por Ken Burns (zoom suave com easing). Vídeos são normalizados para 1080p@30fps.
+
+**Suporte a Múltiplas Imagens por Cena (v3.10+):**
+
+Quando o usuário seleciona múltiplas imagens para uma cena na GUI de revisão manual:
+
+1. Cada imagem é processada individualmente com Ken Burns (efeitos variados: zoom in, zoom out, pan left, pan right)
+2. O tempo da cena é dividido igualmente entre todas as imagens
+3. Os clipes são concatenados automaticamente usando ffmpeg concat
+4. O resultado é um único clipe contendo todas as imagens em sequência
+
+Exemplo: Cena de 10 segundos com 3 imagens:
+- Imagem 1: 3.3s com zoom in
+- Imagem 2: 3.3s com pan left  
+- Imagem 3: 3.3s com zoom out
+- Total: clipe único de 10s
+
+**Importante**: Se já existem clips em cache (`temp_clips/clip_*.mp4`), eles serão reutilizados. Para forçar regeneração com múltiplas imagens, delete os clips antigos primeiro.
 
 ### Passo 7: Renderização Final
 
@@ -768,6 +908,8 @@ Após **QUALQUER** mudança (código, config, dependência, pipeline, fontes, va
 
 | Versão | Data | O que mudou | Arquivos afetados | Autor |
 |--------|------|-------------|-------------------|-------|
+| 3.11 | 26/10/2026 | Adicionada busca e grade de seleção múltipla na GUI de revisão de mídia local; suporte a múltiplas imagens por cena com Ken Burns e concatenação; correção de bug com skip_ollama; inicialização de local_assets_by_scene; tradução automática para português; min_local_images ignorado com revisão manual | `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/modules/visual_processor.py`, `VideoFactoryAI/agent.py`, `VideoFactoryAI/clear_clip_cache.py`, `manual.md` | OpenCode |
+| 3.10 | 26/10/2026 | Adicionado suporte a múltiplas imagens por cena com processamento individual e concatenação automática | `VideoFactoryAI/modules/visual_processor.py`, `VideoFactoryAI/media_research_agent.py`, `manual.md` | OpenCode |
 | 3.9 | 26/10/2026 | Corrigida a resolução de `imagens` relativa para o workspace do projeto; adicionado mínimo configurável de imagens locais distribuídas em cortes, com falha segura sem fallback no modo local | `VideoFactoryAI/agent.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/config.yaml`, `modules/visual_processor.py`, `VideoFactoryAI/tests/test_local_media_review.py`, `VideoFactoryAI/tests/test_gui_media_controls.py`, `VideoFactoryAI/tests/test_visual_processor_regressions.py`, `manual.md` | Copilot |
 | 3.8 | 26/10/2026 | Adicionado modo GUI/CLI para sintetizar somente a narração MP3, sem planejar cenas, gerar legendas ou renderizar vídeo; voz explicitamente selecionada agora prevalece sobre o perfil do canal | `VideoFactoryAI/agent.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/tests/test_local_media_review.py`, `VideoFactoryAI/tests/test_gui_media_controls.py`, `manual.md` | Copilot |
 | 3.7 | 26/10/2026 | Corrigido o envio do identificador CLI da origem de mídia pela GUI e a derivação do slug dos metadados Gem ao produzir a partir de roteiro existente | `VideoFactoryAI/agent.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/tests/test_local_media_review.py`, `manual.md` | Copilot |
