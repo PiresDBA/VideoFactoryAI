@@ -317,6 +317,7 @@ def get_config(config_path: Path, overrides: dict) -> dict:
             "reuse_approved_images": True,
             "gemini_fallback": True,
             "ignore_cache": False,
+            "skip_ollama": False,  # Default: Ollama habilitado
         },
         "pipeline": {
             "resume_mode": True,
@@ -2649,15 +2650,7 @@ def parse_args():
         p.error("--subtitles-only exige o caminho do roteiro original e não aceita --topic.")
     if args.audio_only and args.subtitles_only:
         p.error("--audio-only e --subtitles-only são modos incompatíveis.")
-    # Se o argumento foi passado via linha de comando, atualizamos o dicionário global/config
-    if hasattr(args, 'skip_ollama') and args.skip_ollama:
-        if 'media' in globals() and isinstance(media, dict):
-            media.setdefault('skip_ollama', True)
-        # Ou se o objeto de configuração estiver acessível:
-        try:
-            cfg.setdefault('media', {})['skip_ollama'] = True
-        except NameError:
-            pass   
+    # skip_ollama será processado em main() após cfg ser criado
     if args.youtube_mode in ("authorized", "both"):
         if not args.youtube_authorized_file:
             p.error("--youtube-mode authorized/both exige --youtube-authorized-file com um arquivo LOCAL.")
@@ -2915,6 +2908,9 @@ def main():
         media_cfg["web_research_before_generation"] = args.web_research_before_generation
     if args.prefer_real_media is not None:
         media_cfg["prefer_real_media"] = args.prefer_real_media
+    if hasattr(args, 'skip_ollama') and args.skip_ollama:
+        media_cfg["skip_ollama"] = True
+        print("  [CONFIG] Ollama desabilitado (--skip-ollama ativo)")
     if args.debug is not None:
         cfg["agent"]["verbose"] = args.debug
     if args.ignore_cache is not None:
