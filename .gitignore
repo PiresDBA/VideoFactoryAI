@@ -152,3 +152,17 @@ relatorio_fontes*.json
 # =============================================================================
 .opencode/
 agents/
+
+# =============================================================================
+# 13. Arquivos de teste que podem conter chaves de API (NUNCA commitar)
+# =============================================================================
+teste-*.py
+*_teste.py
+teste_*.py
+*teste-groc*
+*teste-openrouter*
+*api-key*
+*apikey*
+*secret*
+credentials*
+.env.*
