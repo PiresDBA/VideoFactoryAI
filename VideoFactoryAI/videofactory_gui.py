@@ -970,10 +970,23 @@ class VideoFactoryGUI(tk.Tk):
         marker = "__LOCAL_MEDIA_REVIEW__"
         try:
             request = json.loads(line[len(marker):])
-            approved = self._show_local_media_review(request)
+            selected_paths = self._show_local_media_review(request)
             if not self.proc or not self.proc.stdin:
                 raise RuntimeError("O processo não está aguardando uma decisão de revisão.")
-            self.proc.stdin.write("aprovar\n" if approved else "rejeitar\n")
+            
+            # Send the list of selected paths as JSON array
+            if isinstance(selected_paths, list) and selected_paths:
+                # Convert to JSON array and send to agent
+                response = json.dumps(selected_paths)
+                self.proc.stdin.write(response + "\n")
+                print(f"[DEBUG] Enviando {len(selected_paths)} fotos para o agente", flush=True)
+            elif isinstance(selected_paths, bool):
+                # Backward compatibility - simple approve/reject
+                self.proc.stdin.write("aprovar\n" if selected_paths else "rejeitar\n")
+            else:
+                # Default to reject if nothing selected
+                self.proc.stdin.write("rejeitar\n")
+            
             self.proc.stdin.flush()
         except (OSError, ValueError, RuntimeError, KeyError, tk.TclError) as exc:
             self._append_log(f"\n[ERRO] Falha na revisão manual de imagem local: {exc}\n")

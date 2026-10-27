@@ -1845,6 +1845,103 @@ class MediaResearchAgent:
             print(f"    [YouTube autorizado] Erro ao extrair trecho: {exc}")
             return None
 
+    def _translate_query_to_portuguese(self, query_en: str) -> str:
+        """Traduz queries em inglês para português para melhor busca local.
+        
+        Foca em termos visuais comuns relacionados a ferromodelismo e cenas gerais.
+        """
+        if not query_en:
+            return ""
+        
+        # Dicionário de tradução - ordenar por tamanho (mais longos primeiro)
+        # para evitar traduções parciais incorretas
+        translations = [
+            # Ferromodelismo / Model Railroad (frases compostas primeiro)
+            ("model railroad", "ferromodelismo"),
+            ("railroad track", "trilho ferroviário"),
+            ("railway track", "trilho ferroviário"),
+            ("ho scale", "escala HO"),
+            ("flex track", "trilho flexível"),
+            ("cork roadbed", "leito de cortiça"),
+            ("benchwork", "bancada construção"),
+            ("ballasting", "lastreamento"),
+            ("soldering", "solda"),
+            ("weathering", "envelhecimento"),
+            ("airbrush", "aerógrafo"),
+            ("code 83", "código 83"),
+            
+            # Palavras individuais ferromodelismo
+            ("locomotives", "locomotivas"),
+            ("locomotive", "locomotiva"),
+            ("railway", "ferrovia"),
+            ("railroad", "ferrovia"),
+            ("tracks", "trilhos"),
+            ("track", "trilho"),
+            ("layout", "maquete"),
+            ("scenery", "paisagem"),
+            ("terrain", "relevo"),
+            ("plaster", "gesso"),
+            
+            # Ferramentas e Materiais
+            ("plywood", "compensado"),
+            ("workbench", "bancada trabalho"),
+            ("glue", "cola"),
+            ("paint", "tinta"),
+            ("brush", "pincel"),
+            ("knife", "faca"),
+            ("scissors", "tesoura"),
+            ("pliers", "alicate"),
+            ("tools", "ferramentas"),
+            ("wood", "madeira"),
+            
+            # Cenas gerais
+            ("close up", "close"),
+            ("detail", "detalhe"),
+            ("wide shot", "plano aberto"),
+            ("golden hour", "hora dourada"),
+            ("sunrise", "amanhecer"),
+            ("sunset", "pôr do sol"),
+            ("cinematic", "cinematográfico"),
+            ("documentary", "documentário"),
+            ("footage", "filmagem"),
+            ("light", "luz"),
+            ("shadow", "sombra"),
+            ("reflection", "reflexo"),
+            ("night", "noite"),
+            
+            # Natureza
+            ("forest", "floresta"),
+            ("trees", "árvores"),
+            ("grass", "grama"),
+            ("field", "campo"),
+            ("mountain", "montanha"),
+            ("river", "rio"),
+            ("lake", "lago"),
+            ("sky", "céu"),
+            ("clouds", "nuvens"),
+            
+            # Pessoas
+            ("silhouette", "silhueta"),
+            ("person", "pessoa"),
+            ("people", "pessoas"),
+            ("hands", "mãos"),
+            ("man", "homem"),
+            ("woman", "mulher"),
+        ]
+        
+        # Traduzir phrase por phrase (mais longas primeiro)
+        result = query_en.lower()
+        for en, pt in translations:
+            # Usar regex para substituir palavras inteiras
+            import re
+            pattern = r'\b' + re.escape(en) + r'\b'
+            result = re.sub(pattern, pt, result, flags=re.IGNORECASE)
+        
+        # Limpar espaços extras
+        result = ' '.join(result.split())
+        
+        return result
+    
     def _try_local_image(self, scene: dict, dest_path: str) -> Optional[str]:
         local_media = getattr(self, "local_media", None)
         if (
@@ -1855,17 +1952,36 @@ class MediaResearchAgent:
 
         match = None
         # Se skip_ollama estiver desligado, tenta a busca inteligente por texto/Ollama
-        if not getattr(self, "skip_ollama", False) and local_media is not None:
-            query = " ".join(
-                str(scene.get(key) or "").strip()
-                for key in ("texto", "descricao", "wikimedia_q", "query", "ai_prompt")
-                if str(scene.get(key) or "").strip()
-            )
-            if query:
+        skip_ollama = getattr(self, "skip_ollama", False)
+        if skip_ollama:
+            print(f"    [SKIP-OLLAMA] Cena {scene['id']:02d}: Pulando Ollama, indo direto para revisão manual", flush=True)
+        
+        if not skip_ollama and local_media is not None:
+            # PRIORIZAR TEXTO EM PORTUGUÊS para busca local
+            # Usar o texto original do roteiro (que está em português)
+            query_pt = str(scene.get("texto") or "").strip()
+            
+            # Se não houver texto em português, usar query traduzida
+            if not query_pt or len(query_pt) < 10:
+                query_en = str(scene.get("query") or "").strip()
+                query_pt = self._translate_query_to_portuguese(query_en) if query_en else ""
+            
+            # Se ainda não tiver query, usar outros campos
+            if not query_pt:
+                query_pt = " ".join(
+                    str(scene.get(key) or "").strip()
+                    for key in ("descricao", "wikimedia_q", "ai_prompt")
+                    if str(scene.get(key) or "").strip()
+                )
+            
+            if query_pt:
                 try:
-                    match = local_media.find_best(str(query))
-                except Exception:
-                    pass
+                    print(f"    [OLLAMA-PT] Cena {scene['id']:02d}: Buscando com texto em português: '{query_pt[:60]}...'", flush=True)
+                    match = local_media.find_best(query_pt)
+                    if match:
+                        print(f"    [OLLAMA-PT] Cena {scene['id']:02d}: Encontrado '{Path(match['path']).name}'", flush=True)
+                except Exception as e:
+                    print(f"    [OLLAMA-PT] Cena {scene['id']:02d}: Erro: {e}", flush=True)
 
         # Se não houver match ou se o usuário escolheu pular o Ollama, pega a primeira da pasta como padrão para abrir a janela
         if not match:
@@ -1873,6 +1989,7 @@ class MediaResearchAgent:
             files = sorted([p for p in local_folder.glob("*.*") if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}])
             if files:
                 match = {"path": str(files[0].resolve()), "score": 1.0, "title": files[0].name}
+                print(f"    [LOCAL] Cena {scene['id']:02d}: Abrindo GUI com {len(files)} imagens disponíveis da pasta", flush=True)
             else:
                 return None
 
@@ -1894,26 +2011,65 @@ class MediaResearchAgent:
             # Se por acaso retornar apenas uma string (caminho único), converte para lista
             if isinstance(chosen_paths, (str, Path)):
                 chosen_paths = [str(chosen_paths)]
-
-            primary_path = Path(chosen_paths[0])
+            
+            # Filtra apenas paths válidos
+            valid_paths = [p for p in chosen_paths if Path(p).exists()]
+            if not valid_paths:
+                print(f"    [LOCAL MANUAL] Nenhum caminho válido selecionado para a Cena {scene['id']:02d}")
+                return None
+            
             destination = Path(dest_path)
             
             try:
                 from PIL import Image
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                with Image.open(primary_path) as image:
-                    image.convert("RGB").save(destination, format="JPEG", quality=95)
                 
-                local_hash = _file_hash(str(destination))
+                # Salvar todas as fotos selecionadas
                 scene_id = scene["id"]
-                self.used_hashes[local_hash] = scene_id
-                self.used_paths[str(destination)] = scene_id
+                saved_paths = []
                 
-                self._add_report(scene_id, 0, "local_library_manual", str(primary_path), "user-selected", str(destination), "image")
-                print(f"    [LOCAL MANUAL] Foto escolhida para a Cena {scene_id:02d}: {primary_path.name}")
-                return str(destination)
+                for i, path_str in enumerate(valid_paths):
+                    primary_path = Path(path_str)
+                    
+                    # Para a primeira foto, usar o destino principal
+                    if i == 0:
+                        current_dest = destination
+                    else:
+                        # Para fotos adicionais, criar arquivos numerados
+                        stem = destination.stem
+                        suffix = destination.suffix
+                        current_dest = destination.parent / f"{stem}_photo{i+1}{suffix}"
+                    
+                    with Image.open(primary_path) as image:
+                        image.convert("RGB").save(current_dest, format="JPEG", quality=95)
+                    
+                    # Registrar hash e paths
+                    local_hash = _file_hash(str(current_dest))
+                    self.used_hashes[local_hash] = scene_id
+                    self.used_paths[str(current_dest)] = scene_id
+                    
+                    # Adicionar ao relatório
+                    self._add_report(
+                        scene_id, i, "local_library_manual", 
+                        str(primary_path), "user-selected", 
+                        str(current_dest), "image"
+                    )
+                    
+                    saved_paths.append(str(current_dest))
+                    print(f"    [LOCAL MANUAL] Foto {i+1}/{len(valid_paths)} salva para a Cena {scene_id:02d}: {primary_path.name}")
+                
+                # Armazenar todas as fotos para uso posterior
+                if not hasattr(self, 'local_assets_by_scene'):
+                    self.local_assets_by_scene = {}
+                self.local_assets_by_scene[scene_id] = saved_paths
+                
+                print(f"    [LOCAL MANUAL] Total de {len(saved_paths)} fotos aprovadas para a Cena {scene_id:02d}")
+                
+                # Retornar o primeiro caminho (asset principal)
+                return saved_paths[0]
+                
             except Exception as e:
-                print(f"    [LOCAL MANUAL] Erro ao salvar imagem: {e}")
+                print(f"    [LOCAL MANUAL] Erro ao salvar imagens: {e}")
                 return None
         return None
     # ── Pipeline por Cena ─────────────────────────────────────────────────────
@@ -2724,12 +2880,19 @@ class MediaResearchAgent:
                     f"({pending}). Nenhuma busca online ou imagem de fallback foi usada."
                 )
 
-        self.local_assets_by_scene = {}
+        # Preserve existing local_assets_by_scene data (populated by _try_local_image during review)
+        existing_local_assets = getattr(self, 'local_assets_by_scene', {})
+        
         if local_only:
-            self.local_assets_by_scene = {
-                int(scene_id): [path] for scene_id, path in asset_map.items()
-            }
+            # Merge existing data with new data from asset_map
+            merged_assets = dict(existing_local_assets)
+            for scene_id, path in asset_map.items():
+                scene_id_int = int(scene_id)
+                if scene_id_int not in merged_assets:
+                    merged_assets[scene_id_int] = [path]
+            self.local_assets_by_scene = merged_assets
         else:
+            self.local_assets_by_scene = {}
             for record in self.media_report:
                 if record.get("source") == "local_library":
                     try:
@@ -2745,6 +2908,16 @@ class MediaResearchAgent:
         local_image_count = sum(
             len(paths) for paths in self.local_assets_by_scene.values()
         )
+        
+        # Skip minimum_local_images enforcement when manual review is enabled
+        # The user is in control of how many photos to select per scene
+        review_callback = getattr(self, "local_media_review_callback", None)
+        if review_callback is not None:
+            if minimum_local_images > 0:
+                print(f"\n  [LOCAL] Revisão manual ativa: ignorando mínimo de {minimum_local_images} imagens.")
+                print(f"  [LOCAL] Total de {local_image_count} fotos selecionadas manualmente.")
+            minimum_local_images = 0  # Disable enforcement
+        
         if minimum_local_images > local_image_count:
             local_agent = getattr(self, "local_media", None)
             if not getattr(self, "local_media_enabled", False) or local_agent is None:

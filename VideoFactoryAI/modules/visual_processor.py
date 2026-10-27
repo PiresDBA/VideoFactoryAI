@@ -314,16 +314,164 @@ def _create_missing_scene_card(scene: Dict[str, Any], output_path: str) -> None:
     image.save(output_path, "JPEG", quality=90)
 
 
+def _process_multi_image_scene(
+    scene: Dict[str, Any],
+    image_paths: List[str],
+    output_clip_path: str,
+    ffmpeg_path: str,
+    cfg: Dict,
+    scene_idx: int = 0
+) -> bool:
+    """Process multiple images for a single scene and concatenate them.
+    
+    This function divides the scene duration equally among all images,
+    applies Ken Burns effects to each, and concatenates them into a single clip.
+    
+    Args:
+        scene: Scene dictionary with duration, id, etc.
+        image_paths: List of image file paths to process
+        output_clip_path: Path for the final concatenated clip
+        ffmpeg_path: Path to ffmpeg
+        cfg: Configuration
+        scene_idx: Scene index for effect cycling
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    import tempfile
+    import shutil
+    
+    scene_id = scene["id"]
+    duration = float(scene["duration"])
+    
+    # Filter valid image paths
+    valid_images = [p for p in image_paths if os.path.exists(p)]
+    if not valid_images:
+        print(f"    [MULTI-IMAGE] No valid images found for Scene {scene_id:02d}")
+        return False
+    
+    num_images = len(valid_images)
+    # Calculate duration per image (with minimum of 1 second)
+    duration_per_image = max(1.0, duration / num_images)
+    
+    # Adjust: if we can't fit all images, use the first few that fit
+    max_images = max(1, int(duration // 1.0))  # At least 1 second per image
+    if num_images > max_images:
+        print(f"    [MULTI-IMAGE] Scene {scene_id:02d}: Using first {max_images} of {num_images} images (duration constraint)")
+        valid_images = valid_images[:max_images]
+        num_images = max_images
+        duration_per_image = duration / num_images
+    
+    print(f"    [MULTI-IMAGE] Processing {num_images} images ({duration_per_image:.2f}s each) for Scene {scene_id:02d}")
+    
+    # Create temporary clips for each image
+    temp_dir = tempfile.mkdtemp(prefix=f"multi_image_scene_{scene_id:02d}_")
+    temp_clips = []
+    
+    try:
+        # Process each image into a temporary clip
+        for i, image_path in enumerate(valid_images):
+            temp_clip = os.path.join(temp_dir, f"part_{i:02d}.mp4")
+            
+            # Create a scene dict with adjusted duration
+            scene_part = dict(scene)
+            scene_part["duration"] = duration_per_image
+            
+            # Apply different effects to each image for variety
+            part_idx = scene_idx * 10 + i  # Unique index per part
+            success = process_single_scene(
+                scene_part, image_path, temp_clip, ffmpeg_path, cfg, part_idx
+            )
+            
+            if success:
+                temp_clips.append(temp_clip)
+            else:
+                print(f"    [MULTI-IMAGE] Failed to process image {i+1}/{num_images}: {image_path}")
+        
+        if not temp_clips:
+            print(f"    [MULTI-IMAGE] No clips were successfully generated for Scene {scene_id:02d}")
+            return False
+        
+        # If only one image was processed successfully, just use that
+        if len(temp_clips) == 1:
+            shutil.move(temp_clips[0], output_clip_path)
+            return True
+        
+        # Concatenate all clips using ffmpeg concat
+        concat_list = os.path.join(temp_dir, "concat_list.txt")
+        with open(concat_list, "w", encoding="utf-8") as f:
+            for clip in temp_clips:
+                f.write(f"file '{clip}'\n")
+        
+        cmd = [
+            ffmpeg_path, "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_list,
+            "-c", "copy",
+            output_clip_path
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            print(f"    [FFmpeg Error] Concat failed for Scene {scene_id:02d}: {result.stderr[-300:]}")
+            return False
+        
+        # Verify output
+        if os.path.exists(output_clip_path) and os.path.getsize(output_clip_path) > 1000:
+            print(f"    [MULTI-IMAGE] Successfully created {len(temp_clips)}-image clip for Scene {scene_id:02d}")
+            return True
+        else:
+            print(f"    [MULTI-IMAGE] Output file missing or too small for Scene {scene_id:02d}")
+            return False
+            
+    except Exception as e:
+        print(f"    [MULTI-IMAGE] Error processing Scene {scene_id:02d}: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        # Cleanup temporary directory
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+
 def process_all_scenes(
     scenes: List[Dict[str, Any]],
     asset_map: Dict[int, str],
     temp_clips_dir: str,
     ffmpeg_path: str,
-    cfg: Dict
+    cfg: Dict,
+    asset_sequences: Optional[Dict[int, List[str]]] = None
 ) -> List[str]:
-    """Process and normalize all scenes sequentially into standardized clips."""
+    """Process and normalize all scenes sequentially into standardized clips.
+    
+    Args:
+        scenes: List of scene dictionaries
+        asset_map: Primary asset for each scene (scene_id -> path)
+        temp_clips_dir: Output directory for clips
+        ffmpeg_path: Path to ffmpeg executable
+        cfg: Configuration dictionary
+        asset_sequences: Optional dictionary mapping scene_id to a list of image paths.
+                       When provided and a scene has multiple images, they will be
+                       processed individually and concatenated into a single clip.
+    """
     os.makedirs(temp_clips_dir, exist_ok=True)
     processed_clips = []
+    
+    if asset_sequences is None:
+        asset_sequences = {}
     
     total = len(scenes)
     for idx, s in enumerate(scenes, 1):
@@ -334,6 +482,23 @@ def process_all_scenes(
             processed_clips.append(out_path)
             continue
 
+        # Check if scene has multiple images
+        image_sequence = asset_sequences.get(scene_id, [])
+        if len(image_sequence) > 1:
+            print(
+                f"  [{idx:02d}/{total:02d}] Processing Scene {scene_id:02d} "
+                f"(MULTI-IMAGE, {len(image_sequence)} photos, {s['duration']:.2f}s)..."
+            )
+            success = _process_multi_image_scene(
+                s, image_sequence, out_path, ffmpeg_path, cfg, scene_idx=idx
+            )
+            if success:
+                processed_clips.append(out_path)
+                continue
+            else:
+                print(f"    [WARN] Multi-image processing failed for Scene {scene_id:02d}, falling back to single image")
+        
+        # Single image processing (original logic)
         source_asset = asset_map.get(scene_id)
         scene_to_process = s
         fallback_used = False
