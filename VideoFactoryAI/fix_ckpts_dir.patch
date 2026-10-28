@@ -1,0 +1,27 @@
+--- a/agent.py
++++ b/agent.py
+@@ -2288,6 +2288,7 @@
+ 
+ def save_checkpoint(state: dict, path: Path):
+     """Salva o progresso da execução em formato JSON para permitir o uso de --resume."""
++    path.parent.mkdir(parents=True, exist_ok=True)
+     with open(path, "w", encoding="utf-8") as f:
+         json.dump(state, f, ensure_ascii=False, indent=2)
+ 
+@@ -3125,7 +3126,7 @@
+     # Força criação das pastas necessárias (ainda que em modo reduzido)
+     # Em modo --images-only, ainda precisamos de pastas para os assets
+     # Em modo --render-only, precisamos de pastas de saída
+-    for d in [project_dir, imagens_dir]:
++    for d in [project_dir, imagens_dir, videos_dir, ckpts_dir, thumbs_dir, metadados_dir]:
+         d.mkdir(parents=True, exist_ok=True)
+ 
+     # -------------------------------------------------------------------------
+@@ -3251,6 +3252,7 @@
+         log(f"  {len(scenes)} cenas planejadas "
+             f"({sum(1 for s in scenes if s['tipo']=='video')} vídeo | "
+             f"{sum(1 for s in scenes if s['tipo']=='image')} imagem)")
++        plan_path.parent.mkdir(parents=True, exist_ok=True)
+         with open(plan_path, "w", encoding="utf-8") as f:
+             json.dump(scenes, f, ensure_ascii=False, indent=2)
+         if not args.no_checkpoint:

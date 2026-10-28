@@ -379,13 +379,13 @@ class ImageValidatorAgent:
             self._last_content_validation_was_gemini
             and self.use_llm
             and asset_type == "image"
-            and content_score > 85
+            and content_score > 80
         )
         if gemini_high_score:
             final_score = content_score
             approved = timing_ok
             reason = (
-                f"Gemini aprovou com score {content_score:g} (>85); "
+                f"Gemini aprovou com score {content_score:g} (>80); "
                 "validação do Diretor de Arte ignorada"
                 if approved else timing_reason
             )

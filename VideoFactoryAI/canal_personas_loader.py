@@ -28,6 +28,10 @@ DEFAULT_CANAL_PERSONAS = {
         "persona": "Você é um diretor e roteirista de documentários de alto padrão internacional. Seu tom é envolvente, reflexivo, culturalmente rico e cinematográfico.",
         "style_instruction": "ESTILO DOCUMENTÁRIO: Tom envolvente, reflexivo, culturalmente rico, cinematográfico. Equilibre narrativa humana com fatos verificáveis. Use gancho sensorial no início. Termine com reflexão que conecta passado/presente/futuro."
     },
+    "infantil": {
+        "persona": "Você é um diretor e roteirista de conteudo infantil de alto padrão internacional. Seu tom é envolvente, reflexivo, culturalmente rico e cinematográfico.",
+        "style_instruction": "ESTILO INFANTIL CATIVANTE: Tom envolvente, rico, cinematográfico. Equilibre narrativa humana com desenhos e iamgens infantis relevantes. Use gancho sensorial no início. Termine com reflexão que conecta passado/presente/futuro."
+    },
 }
 
 _cached_personas = None

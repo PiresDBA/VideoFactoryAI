@@ -1,0 +1,21 @@
+--- a/gemini_webchat_image.py
++++ b/gemini_webchat_image.py
+@@ -445,15 +445,9 @@
+         # Exclui thumbnails/resultados da pesquisa para aceitar somente a imagem gerada.
+         prior_srcs = _image_src_snapshot(page)
+         prior_button_count = len(_download_buttons(page))
+-        instruction = (
+-            "Gere uma IMAGEM original para uma cena de vídeo documental/educacional. "
+-            "Não responda apenas com texto: produza a imagem. "
+-            "Composição horizontal 16:9, adequada para saída Full HD 1920x1080. "
+-            "Mostre especificamente o conteúdo descrito; não substitua por assunto apenas parecido. "
+-            "Sem texto sobreposto, logotipos ou marcas d'água. "
+-            "Não imponha estética cinematográfica se ela não for necessária.\n"
+-            f"TEMA: {topic}\nCENA: {scene_id}\nDESCRIÇÃO/PROMPT: {prompt}\n"
+-        )
++        # Um único prompt direto: sem tema, cena ou texto extra que o modelo possa
++        # responder com outro prompt em vez de imagem.
++        instruction = f"Gere uma imagem 16:9, sem texto na imagem: {prompt}"
+         style = os.environ.get("VF_IMAGE_STYLE", "").strip()
+         modifiers = os.environ.get("VF_IMAGE_STYLE_MODIFIERS", "").strip()
+         if style:

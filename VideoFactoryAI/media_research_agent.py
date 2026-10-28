@@ -39,6 +39,8 @@ import requests
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from pipeline_resume import build_resume_report
+from bing_provider import BingImageProvider
+from query_detector import SearchQueryDetector
 
 # AssetCache
 _CACHE_AVAILABLE = False
@@ -81,6 +83,93 @@ _PROVIDER_LIMITS_LOCK = threading.Lock()
 _GEMINI_OUTPUT_LOCK = threading.Lock()
 
 
+def _extract_visual_keywords(text: str, max_keywords: int = 8) -> List[str]:
+    """
+    Extrai palavras-chave visuais relevantes do texto de uma cena para busca de mídia.
+    Foca em substantivos concretos, objetos, ações visuais, materiais, técnicas.
+    """
+    if not text:
+        return []
+    
+    import re
+    found_keywords = set()
+    text_lower = text.lower()
+    
+    # Palavras-chave visuais específicas de modelismo/ferreomodelismo
+    visual_terms = [
+        "XPS", "isopor", "poliestireno", "espuma", "espuma PU", "cola PVA", "cola de contato", 
+        "silicone", "epoxi", "resina", "hydrocal", "gesso", "plaster", "plaster cloth", 
+        "gesso cimento", "massa de modelar", "argila", "moldes de silicone", "rock molds", 
+        "moldes de rocha", "cortica", "EVA", "EVA denso", "roadbed", "leito", "sub-leito", 
+        "subleito", "compensado", "compensado naval", "madeira", "pinus", "pinus aplainado", 
+        "ripas", "travessas", "longarinas", "elevadores", "risers", "estrutura", 
+        "grade aberta", "open grid", "L-girder", "benchwork", "bancada",
+        "trilho", "trilhos", "flex track", "trilho flexivel", "code 83", "code 100", 
+        "code 70", "rail", "dormente", "dormentes", "ties", "sleepers", "juncao", "juntas", 
+        "rail joiners", "uniao", "solda", "soldagem", "ferro de solda", "estanho", "fluxo",
+        "lastro", "ballast", "ballasting", "cortica bisotada", "bisotada", "EVA denso", 
+        "cascalho", "pedra", "grao", "grnulos", "areia", "wet water", "agua molhada", 
+        "cola de lastro", "PVA", "detergente", "capilaridade", "absorcao",
+        "poliestireno extrudado", "isopor extrudado", "espuma rigida", "cortador termico", 
+        "hot wire", "hot wire cutter", "fio quente", "cortador de fio", "esculpir", 
+        "surform", "raspadeira", "lixar", "lixadeira",
+        "rocha", "rochas", "rock", "rock molds", "moldes de rocha", "silicone", 
+        "borracha de silicone", "hydrocal", "plaster", "gesso pedra", "gesso tipo Hydrocal", 
+        "gesso odontologico", "moldes", "casting", "casting de rocha", "fundicao", 
+        "pintura de rocha", "wash", "washes", "lavagem", "lixiviacao", "drybrush", 
+        "dry brush", "escovacao a seco", "pigmento", "pigmentos", "pastel", "giz pastel", 
+        "fuligem", "ferrugem", "terra seca", "poeira", "verniz fosco", "dullcote", "Testors",
+        "static grass", "grama estatica", "aplicador eletrostatico", "static grass applicator", 
+        "eletrostatico", "eletrostatica", "campo eletrostatico", "fibras", "fibras de nylon", 
+        "fibras sinteticas", "grama baixa", "pasto", "capim alto", "mato queimado", 
+        "verde claro", "verde oliva", "palha seca", "cola PVA", "clipe jacare", "terra", 
+        "aspirador", "meia-calca",
+        "aerografo", "airbrush", "air brush", "compressor", "bico 0.2", "bico 0.3", 
+        "dupla acao", "tinta acrilica", "marrom escuro", "cinza escuro", "Railboard Brown", 
+        "Dark Rust", "preto fosco", "diluiu", "aguarras", "white spirit", "aguarras mineral", 
+        "pincel", "pincel umedecido", "burnt sienna", "ferrugem", "fuligem", "escapamento", 
+        "chamine", "exaustor", "exaustao a diesel",
+        "LED", "SMD", "0805", "0603", "branco quente", "2700K", "lampada incandescente", 
+        "iluminacao interior", "light leak", "light bleed", "vazamento de luz", 
+        "preto fosco", "black paint", "interior", "edificio", "predio", "casas", "casario", 
+        "vilarejo", "cidade", "posta de iluminacao", "poste", "luz", "fiacao", 
+        "fio elastico", "fio de poliuretano", "costura",
+        "vegetacao", "vegetacao rasteira", "arbustos", "esponja triturada", "cinzenta", 
+        "Clump Foliage", "foliage", "arbustos", "margens", "margem", "trilhos", 
+        "postes", "iluminacao", "fiacao telefonica", "fio elastico", "fio de poliuretano", 
+        "esticar", "quebrar", "toque acidental",
+        "transicao", "crepusculo", "iluminacao", "sequencia", "sequencia de luzes", 
+        "estudio", "luzes", "casas", "locomotivas", "acendem", "acender", 
+        "Busca de Imagem", "Referencia", "HO scale", "building", "LED", "interior", 
+        "lighting", "light bleed", "prevention",
+        "marcenaria", "tripe", "softbox", "duplo", "pleno aberto", "zenital", "90", 
+        "trilhos", "solda", "lente macro", "90mm", "100mm", "luz pontual", "ring light", 
+        "super close-up", "close-up", "45", "relevo", "rochas", "gimbal", "portatil", 
+        "camera na mao", "luz lateral", "unica", "sombras", "plano medio", "perfil", 
+        "lastro", "grama", "lente macro", "slider", "luz difusa", "alta fidelidade", 
+        "CRI 95+", "rasante", "nivel dos trilhos", "weathering", "camera", "mesa", 
+        "estudio", "luz fria", "neutra", "sem reflexos", "plano fechado", "mao", "artesao", 
+        "close-up", "plano fechado", "cenas finais", "lente probe", "mini camera", 
+        "luz conica", "propria maquete", "visao do maquinista", "cab view",
+    ]
+    
+    found_keywords = set()
+    text_lower = text.lower()
+    
+    for term in visual_terms:
+        if term.lower() in text_lower:
+            found_keywords.add(term)
+    
+    tech_compounds = re.findall(r'\b(?:model railroad|model railroader|model rail|HO scale|N scale|O scale|code 83|code 100|code 70|flex track|trilho flex|code 83|code 100|code 70|dormente|dormentes|lastro|ballast|ballasting|XPS|isopor|poliestireno|hydrocal|gesso|plaster|rock molds|moldes de rocha|static grass|static grass applicator|aplicador eletrostatico|aerografo|airbrush|weathering|drybrush|dry brush|wash|washes|pigmento|pigmentos|static grass|grama estatica|lastro|ballast|cortica|EVA|roadbed|leito|sub-leito|subleito|compensado|compensado naval|madeira|pinus|pinus aplainado|ripas|travessas|longarinas|elevadores|risers|estrutura|grade aberta|open grid|L-girder|benchwork|bancada|trilho|trilhos|flex track|trilho flexivel|code 83|code 100|code 70|rail|dormente|dormentes|ties|sleepers|juncao|juntas|rail joiners|uniao|solda|soldagem|ferro de solda|estanho|fluxo|XPS|isopor|isopor extrudado|poliestireno|espuma|espuma PU|cola PVA|cola de contato|silicone|epoxi|resina|hydrocal|gesso|plaster|plaster cloth|gesso cimento|massa de modelar|argila|silicone moldes|moldes de silicone|rock molds|moldes de rocha|gesso cimento|massa de modelar|argila)\b', text_lower)
+    
+    for tc in tech_compounds:
+        if len(tc) > 3:
+            found_keywords.add(tc)
+    
+    keywords = sorted(list(found_keywords), key=len, reverse=True)
+    return keywords[:max_keywords]
+
+
 def _media_source_permissions(mode: str) -> Dict[str, bool]:
     """Return which source families are permitted for a configured media mode."""
     permissions = {
@@ -112,6 +201,8 @@ class _ThreadTeeOutput:
         self._stream = sys.stdout
         self._owner = threading.get_ident()
         self._captured: List[str] = []
+        self.scene_retry_count = {}
+        self.max_scene_retries = 1
 
     def write(self, value: str) -> int:
         if threading.get_ident() == self._owner:
@@ -380,8 +471,8 @@ def _l1_pexels_video(query: str, dest: str, api_key: str, exclude_urls: Optional
 
 def _l1_internet_archive_video(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
     """
-    Busca vídeo histórico no Internet Archive (domínio público / CC).
-    Filtra apenas conteúdo com licença CC ou domínio público e sem repetição.
+    Busca vídeo histórico no Internet Archive .
+  
     """
     url = "https://archive.org/advancedsearch.php"
     params = {
@@ -551,7 +642,59 @@ def _l2_unsplash_image(query: str, dest: str, api_key: str, exclude_urls: Option
         print(f"    [Unsplash] '{query}': {e}")
     return None
 
+def _l2_bing_image(
+    query: str,
+    dest: str,
+    exclude_urls=None,
+):
+    """
+    Wrapper para integrar BingImageProvider
+    ao pipeline L2 do MediaResearchAgent.
+    """
 
+    try:
+
+        from bing_provider import BingImageProvider
+        from pathlib import Path
+        import shutil
+
+        provider = BingImageProvider(
+            min_width=1280,
+            min_height=720,
+            headless=True,
+        )
+
+        temp_dir = (
+            Path(dest).parent /
+            "_bing_temp"
+        )
+
+        files = provider.download(
+            query=query,
+            dest_dir=str(temp_dir),
+            max_images=20,
+        )
+
+        if not files:
+            return None
+        print(f"[DEBUG] Bing retornou {len(files)} arquivos")
+
+        for i, f in enumerate(files):
+             print(f"[DEBUG] candidato {i+1}: {f}")
+
+    
+        return (
+            files,
+            "bing image search",
+        )
+
+    except Exception as e:
+
+        print(
+            f"    [Bing Image] '{query}': {e}"
+        )
+
+    return None
 def _l2_wikimedia_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
     """Busca imagem no Wikimedia Commons com verificação de licença e sem duplicatas."""
     url = "https://commons.wikimedia.org/w/api.php"
@@ -613,180 +756,15 @@ def _l2_wikimedia_image(query: str, dest: str, exclude_urls: Optional[set] = Non
 
 # Mapeamento de sites para funções de busca HTML
 FREE_IMAGE_SOURCES = {
-    "burst": {
-        "url": "https://burst.shopify.com/photos/search",
-        "params": {"term": "{query}"},
-        "license": "burst license",
-    },
-    "unsplash": {
-        "url": "https://unsplash.com/s/photos/{query}",
-        "params": {},
-        "license": "unsplash license",
-    },
     "pexels": {
         "url": "https://www.pexels.com/search/{query}/",
         "params": {},
         "license": "pexels license",
     },
-    "shutterstock": {
-        "url": "https://www.shutterstock.com/search/{query}",
-        "params": {"license": "rf"},
-        "license": "shutterstock license",
-    },
-    "gettyimages": {
-        "url": "https://www.gettyimages.com/search/2/image?phrase={query}",
-        "params": {},
-        "license": "gettyimages license",
-    },
-    "canva": {
-        "url": "https://www.canva.com/photos/search/{query}/",
-        "params": {},
-        "license": "canva license",
-    },
-    "istock": {
-        "url": "https://www.istockphoto.com/search/2/image?phrase={query}",
-        "params": {},
-        "license": "istock license",
-    },
     "freepik": {
         "url": "https://www.freepik.com/search?format=search&query={query}",
         "params": {},
         "license": "freepik license",
-    },
-    "picjumbo": {
-        "url": "https://picjumbo.com/search/{query}/",
-        "params": {},
-        "license": "picjumbo license",
-    },
-    "lifeofpix": {
-        "url": "https://www.lifeofpix.com/search/?q={query}",
-        "params": {},
-        "license": "lifeofpix license",
-    },
-    "depositphotos": {
-        "url": "https://depositphotos.com/stock-photos/{query}.html",
-        "params": {},
-        "license": "depositphotos license",
-    },
-    "isorepublic": {
-        "url": "https://isorepublic.com/search/?s={query}",
-        "params": {},
-        "license": "isorepublic license",
-    },
-    "freeimages": {
-        "url": "https://www.freeimages.com/search/{query}",
-        "params": {},
-        "license": "freeimages license",
-    },
-    "gratispics": {
-        "url": "https://gratispics.com/search/{query}/",
-        "params": {},
-        "license": "gratispics license",
-    },
-    "newoldstock": {
-        "url": "https://nos.twnsnd.co/search?q={query}",
-        "params": {},
-        "license": "newoldstock license",
-    },
-    "kaboompics": {
-        "url": "https://kaboompics.com/search?q={query}",
-        "params": {},
-        "license": "kaboompics license",
-    },
-    "freerange": {
-        "url": "https://freerangestock.com/search.php?search={query}",
-        "params": {},
-        "license": "freerange license",
-    },
-    "adobestock": {
-        "url": "https://stock.adobe.com/search?k={query}",
-        "params": {},
-        "license": "adobestock license",
-    },
-    "stocksnap": {
-        "url": "https://stocksnap.io/search/{query}",
-        "params": {},
-        "license": "stocksnap license",
-    },
-    "stockvault": {
-        "url": "https://www.stockvault.net/search/{query}",
-        "params": {},
-        "license": "stockvault license",
-    },
-    "foodiesfeed": {
-        "url": "https://www.foodiesfeed.com/search/?q={query}",
-        "params": {},
-        "license": "foodiesfeed license",
-    },
-    "focastock": {
-        "url": "https://focastock.com/search/{query}/",
-        "params": {},
-        "license": "focastock license",
-    },
-    "morguefile": {
-        "url": "https://morguefile.com/search/{query}",
-        "params": {},
-        "license": "morguefile license",
-    },
-    "pikwizard": {
-        "url": "https://www.pikwizard.com/search?q={query}",
-        "params": {},
-        "license": "pikwizard license",
-    },
-    "reshot": {
-        "url": "https://www.reshot.com/search/?q={query}",
-        "params": {},
-        "license": "reshot license",
-    },
-    "freestocks": {
-        "url": "https://freestocks.org/search/{query}",
-        "params": {},
-        "license": "freestocks license",
-    },
-    "picography": {
-        "url": "https://picography.co/search/?s={query}",
-        "params": {},
-        "license": "picography license",
-    },
-    "skitterphoto": {
-        "url": "https://skitterphoto.com/search?q={query}",
-        "params": {},
-        "license": "skitterphoto license",
-    },
-    "littlevisuals": {
-        "url": "https://littlevisuals.co/search/?s={query}",
-        "params": {},
-        "license": "littlevisuals license",
-    },
-    "jaymantri": {
-        "url": "https://jaymantri.com/search/?s={query}",
-        "params": {},
-        "license": "jaymantri license",
-    },
-    "picspree": {
-        "url": "https://picspree.com/search?q={query}",
-        "params": {},
-        "license": "picspree license",
-    },
-    "libreshot": {
-        "url": "https://libreshot.com/search/?s={query}",
-        "params": {},
-        "license": "libreshot license",
-    },
-    "startupstockphotos": {
-        "url": "https://startupstockphotos.com/search/?s={query}",
-        "params": {},
-        "license": "startupstockphotos license",
-    },
-    "rgbstock": {
-        "url": "https://www.rgbstock.com/search/{query}",
-        "params": {},
-        "license": "rgbstock license",
-    },
-    "negativespace": {
-        "url": "https://negativespace.co/search/{query}",
-        "params": {},
-        "license": "negativespace license",
     },
 }
 
@@ -973,169 +951,6 @@ def _l2_free_image_source(query: str, dest: str, source_name: str,
 def _l2_burst_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
     """Busca imagem no Burst by Shopify."""
     return _l2_free_image_source(query, dest, "burst", exclude_urls)
-
-
-def _l2_pikwizard_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Pikwizard."""
-    return _l2_free_image_source(query, dest, "pikwizard", exclude_urls)
-
-
-def _l2_reshot_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Reshot."""
-    return _l2_free_image_source(query, dest, "reshot", exclude_urls)
-
-
-def _l2_freestocks_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Freestocks.org."""
-    return _l2_free_image_source(query, dest, "freestocks", exclude_urls)
-
-
-def _l2_picography_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Picography."""
-    return _l2_free_image_source(query, dest, "picography", exclude_urls)
-
-
-def _l2_skitterphoto_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Skitterphoto."""
-    return _l2_free_image_source(query, dest, "skitterphoto", exclude_urls)
-
-
-def _l2_littlevisuals_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Little Visuals."""
-    return _l2_free_image_source(query, dest, "littlevisuals", exclude_urls)
-
-
-def _l2_jaymantri_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Jay Mantri."""
-    return _l2_free_image_source(query, dest, "jaymantri", exclude_urls)
-
-
-def _l2_picspree_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Picspree."""
-    return _l2_free_image_source(query, dest, "picspree", exclude_urls)
-
-
-def _l2_libreshot_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no LibreShot."""
-    return _l2_free_image_source(query, dest, "libreshot", exclude_urls)
-
-
-def _l2_startupstockphotos_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Startup Stock Photos."""
-    return _l2_free_image_source(query, dest, "startupstockphotos", exclude_urls)
-
-
-def _l2_rgbstock_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no RGBStock."""
-    return _l2_free_image_source(query, dest, "rgbstock", exclude_urls)
-
-
-def _l2_negativespace_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Negative Space."""
-    return _l2_free_image_source(query, dest, "negativespace", exclude_urls)
-
-
-def _l2_freepik_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Freepik (requer API key)."""
-    return _l2_free_image_source(query, dest, "freepik", exclude_urls)
-
-
-def _l2_picjumbo_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Picjumbo."""
-    return _l2_free_image_source(query, dest, "picjumbo", exclude_urls)
-
-
-def _l2_lifeofpix_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Life of Pix."""
-    return _l2_free_image_source(query, dest, "lifeofpix", exclude_urls)
-
-
-def _l2_depositphotos_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Depositphotos."""
-    return _l2_free_image_source(query, dest, "depositphotos", exclude_urls)
-
-
-def _l2_isorepublic_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no ISO Republic."""
-    return _l2_free_image_source(query, dest, "isorepublic", exclude_urls)
-
-
-def _l2_freeimages_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no FreeImages."""
-    return _l2_free_image_source(query, dest, "freeimages", exclude_urls)
-
-
-def _l2_gratispics_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Gratispics."""
-    return _l2_free_image_source(query, dest, "gratispics", exclude_urls)
-
-
-def _l2_newoldstock_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no New Old Stock."""
-    return _l2_free_image_source(query, dest, "newoldstock", exclude_urls)
-
-
-def _l2_kaboompics_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Kaboompics."""
-    return _l2_free_image_source(query, dest, "kaboompics", exclude_urls)
-
-
-def _l2_freerange_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Freerange Stock."""
-    return _l2_free_image_source(query, dest, "freerange", exclude_urls)
-
-
-def _l2_adobestock_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Adobe Stock."""
-    return _l2_free_image_source(query, dest, "adobestock", exclude_urls)
-
-
-def _l2_stocksnap_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no StockSnap.io."""
-    return _l2_free_image_source(query, dest, "stocksnap", exclude_urls)
-
-
-def _l2_stockvault_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Stockvault."""
-    return _l2_free_image_source(query, dest, "stockvault", exclude_urls)
-
-
-def _l2_foodiesfeed_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Foodiesfeed (especializado em comida)."""
-    return _l2_free_image_source(query, dest, "foodiesfeed", exclude_urls)
-
-
-def _l2_focastock_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no FOCA Stock."""
-    return _l2_free_image_source(query, dest, "focastock", exclude_urls)
-
-
-def _l2_morguefile_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no MorgueFile."""
-    return _l2_free_image_source(query, dest, "morguefile", exclude_urls)
-
-
-def _l2_shutterstock_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Shutterstock."""
-    return _l2_free_image_source(query, dest, "shutterstock", exclude_urls)
-
-
-def _l2_gettyimages_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Getty Images."""
-    return _l2_free_image_source(query, dest, "gettyimages", exclude_urls)
-
-
-def _l2_canva_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no Canva."""
-    return _l2_free_image_source(query, dest, "canva", exclude_urls)
-
-
-def _l2_istock_image(query: str, dest: str, exclude_urls: Optional[set] = None) -> Optional[Tuple[str, str]]:
-    """Busca imagem no iStock."""
-    return _l2_free_image_source(query, dest, "istock", exclude_urls)
-
-
-
 # =============================================================================
 # NÍVEL 2 — BANCOS GRATUITOS ADICIONAIS (somente os aprovados em teste real)
 # =============================================================================
@@ -1439,7 +1254,7 @@ class MediaResearchAgent:
         self.force_regeneration = bool(media_cfg.get("force_regeneration", False))
         self.ignore_cache = bool(media_cfg.get("ignore_cache", False))
         self.web_research_before_generation = bool(
-            media_cfg.get("web_research_before_generation", True)
+            media_cfg.get("web_research_before_generation", False)
         )
         self.gemini_only = str(media_cfg.get("gemini_only", False)).strip().lower() in {
             "1", "true", "yes", "on",
@@ -1468,10 +1283,10 @@ class MediaResearchAgent:
         except (TypeError, ValueError):
             self.scene_workers = 3
         try:
-            configured_candidates = os.environ.get("VF_STOCK_CANDIDATES_PER_SCENE", media_cfg.get("stock_candidates_per_scene", 3))
-            self.stock_candidates_per_scene = max(1, min(8, int(configured_candidates)))
+            configured_candidates = os.environ.get("VF_STOCK_CANDIDATES_PER_SCENE", media_cfg.get("stock_candidates_per_scene", 13))
+            self.stock_candidates_per_scene = max(1, min(18, int(configured_candidates)))
         except (TypeError, ValueError):
-            self.stock_candidates_per_scene = 3
+            self.stock_candidates_per_scene = 4
         self._provider_locks = {provider: threading.Lock() for provider in self.generation_providers}
         self._evaluation_lock = threading.Lock()
         self._youtube_segment_cursor = 0.0
@@ -1945,6 +1760,137 @@ class MediaResearchAgent:
         
         return result
     
+    def _build_web_search_queries(self, scene: dict, base_query: str = "") -> list:
+        """Gera queries simplificadas para busca em bancos de imagens da web.
+        
+        Cria variações mais curtas e naturais em português e inglês para
+        aumentar a taxa de sucesso na busca por imagens reais na web.
+        
+        Returns:
+            Lista de queries ordenadas por prioridade (português primeiro)
+        """
+        import re
+        
+        sid = scene.get("id", 0)
+        scene_text = str(scene.get("texto", "") or scene.get("descricao", "") or "")
+        topic = getattr(self, "_current_topic", "")
+        
+        queries = []
+        seen = set()
+        
+        def add_query(q: str, priority: int = 0):
+            """Adiciona query evitando duplicatas."""
+            q = str(q or "").strip()
+            if not q or len(q) < 3:
+                return
+            q_lower = q.lower()
+            if q_lower not in seen:
+                seen.add(q_lower)
+                queries.append((priority, q))
+        
+        # ── 1. Extrair termos-chave do texto da cena ──────────────────────
+        # Remove palavras de parada em português e inglês
+        stop_words = {
+            # Português
+            "o", "a", "os", "as", "um", "uma", "de", "do", "da", "dos", "das",
+            "em", "no", "na", "nos", "nas", "por", "para", "com", "sem",
+            "que", "se", "ao", "à", "é", "era", "eram", "foi", "foram",
+            "está", "estão", "estava", "estavam", "tem", "tinha", "tiveram",
+            "mais", "menos", "muito", "muita", "muitos", "muitas",
+            "este", "esta", "estes", "estas", "esse", "essa", "esses", "essas",
+            "aquele", "aquela", "aqueles", "aquelas", "isso", "isto", "aquilo",
+            "ele", "ela", "eles", "elas", "nós", "vocês", "eu", "tu",
+            "meu", "minha", "meus", "minhas", "seu", "sua", "seus", "suas",
+            "nosso", "nossa", "nossos", "nossas", "dele", "dela", "deles", "delas",
+            "e", "ou", "mas", "porque", "pois", "já", "não", "sim",
+            "até", "desde", "entre", "sobre", "sob", "após", "antes",
+            "quando", "onde", "como", "qual", "quais", "quem", "que",
+            # Inglês
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to",
+            "for", "of", "with", "by", "from", "as", "is", "was", "were",
+            "are", "been", "be", "have", "has", "had", "do", "does", "did",
+            "will", "would", "could", "should", "may", "might", "shall", "can",
+            "this", "that", "these", "those", "it", "its", "he", "she", "they",
+            "we", "you", "i", "me", "my", "your", "his", "her", "our", "their",
+            "not", "no", "yes", "if", "then", "than", "so", "too", "very",
+            "just", "about", "into", "over", "after", "before", "up", "down",
+        }
+        
+        # Extrair palavras significativas do texto da cena
+        words = re.findall(r'[a-zA-ZàáâãéêíóôõúçÀÁÂÃÉÊÍÓÔÕÚÇ]{3,}', scene_text.lower())
+        keywords = [w for w in words if w not in stop_words and len(w) >= 3]
+        
+        # ── 2. Gerar queries em português (PRIORIDADE MÁXIMA) ─────────────
+        
+        # 2a. Termos do dicionário de tradução (mais específicos)
+        if base_query:
+            query_pt = self._translate_query_to_portuguese(base_query)
+            # Extrair substantivos principais da query traduzida
+            pt_words = [w for w in query_pt.split() if w not in stop_words and len(w) >= 3]
+            if pt_words:
+                # Query completa traduzida (prioridade alta)
+                add_query(query_pt, priority=0)
+                # Primeiras 2-3 palavras mais importantes
+                add_query(" ".join(pt_words[:3]), priority=1)
+                # Palavra individual mais significativa
+                add_query(pt_words[0], priority=2)
+        
+        # 2b. Palavras-chave extraídas do texto da cena (em português)
+        if keywords:
+            # Primeiras 2-3 palavras-chave mais frequentes/significativas
+            add_query(" ".join(keywords[:3]), priority=1)
+            # Palavra-chave individual mais importante
+            add_query(keywords[0], priority=2)
+        
+        # ── 3. Queries em inglês (fallback) ───────────────────────────────
+        
+        # 3a. Query original em inglês (se diferente da traduzida)
+        if base_query:
+            add_query(base_query.lower(), priority=3)
+        
+        # 3b. Palavras-chave em inglês do dicionário reverso
+        if base_query:
+            # Tentar extrair termos em inglês da query original
+            en_words = [w for w in base_query.lower().split() if w not in stop_words and len(w) >= 3]
+            if en_words:
+                add_query(" ".join(en_words[:3]), priority=4)
+                add_query(en_words[0], priority=5)
+        
+        # ── 4. Queries genéricas contextuais (último recurso) ─────────────
+        
+        # Se temos tema, adicionar termo genérico do tema
+        if topic:
+            topic_pt = self._translate_query_to_portuguese(topic)
+            add_query(topic_pt, priority=6)
+        
+        # Adicionar termos visuais genéricos baseados no conteúdo
+        visual_hints = []
+        text_lower = scene_text.lower()
+        
+        # Detectar elementos visuais comuns
+        if any(w in text_lower for w in ["pessoa", "homem", "mulher", "rosto", "olhos", "mãos"]):
+            visual_hints.extend(["pessoa", "retrato", "close"])
+        if any(w in text_lower for w in ["paisagem", "natureza", "céu", "montanha", "floresta"]):
+            visual_hints.extend(["paisagem", "natureza"])
+        if any(w in text_lower for w in ["prédio", "casa", "cidade", "rua", "estrada"]):
+            visual_hints.extend(["arquitetura", "urbano"])
+        if any(w in text_lower for w in ["antigo", "histórico", "época", "guerra", "batalha"]):
+            visual_hints.extend(["histórico", "vintage", "época antiga"])
+        if any(w in text_lower for w in ["ferromodelismo", "locomotiva", "trilho", "maquete"]):
+            visual_hints.extend(["ferromodelismo", "locomotiva", "ferrovia"])
+        
+        for hint in visual_hints[:2]:  # Máximo 2 hints visuais
+            add_query(hint, priority=7)
+        
+        # ── Ordenar por prioridade e retornar ─────────────────────────────
+        queries.sort(key=lambda x: x[0])
+        result = [q for _, q in queries[:6]]  # Retornar no máximo 6 queries
+        
+        if result:
+            print(f"    [QueryBuilder] Cena {sid:02d}: {len(result)} queries geradas: {result[:3]}...")
+        
+        return result
+    
     def _try_local_image(self, scene: dict, dest_path: str) -> Optional[str]:
         local_media = getattr(self, "local_media", None)
         if (
@@ -2317,7 +2263,7 @@ class MediaResearchAgent:
                             scene_id=sid,
                             topic=getattr(self, "_current_topic", "documentario"),
                             web_research_before_generation=getattr(
-                                self, "web_research_before_generation", True
+                                self, "web_research_before_generation", False
                             ),
                             scene_text=scene_context,
                             query=wm_query or query,
@@ -2376,10 +2322,11 @@ class MediaResearchAgent:
         search_limit_reached = False
         for source_fn, name in (
             [
-            (lambda q, d: _l2_pixabay_image(q, d, self.pixabay_key, exclude_urls=self.used_urls),   "pixabay_image"),
-            (lambda q, d: _l2_wikimedia_image(q, d, exclude_urls=self.used_urls),                   "wikimedia_image"),
-            (lambda q, d: _l2_pexels_image(q, d, self.pexels_key, exclude_urls=self.used_urls),     "pexels_image"),
-            (lambda q, d: _l2_unsplash_image(q, d, self.unsplash_key, exclude_urls=self.used_urls), "unsplash_image"),
+                (lambda q, d: _l2_bing_image(
+                    q,
+                    d,
+                    exclude_urls=self.used_urls
+                ), "bing_image"),
             ]
             if source_permissions["internet_images"] else []
         ):
@@ -2395,8 +2342,55 @@ class MediaResearchAgent:
                     search_limit_reached = True
                     print(f"    [L2] Limite de {self.stock_candidates_per_scene} tentativas em bancos atingido; escalando para geração se esta candidata não servir.")
                 if result:
-                    url, lic = result
-                    i_hash = _file_hash(dest_path)
+
+                    files, lic = result
+
+                    print(
+                        f"    [DEBUG] Recebi "
+                        f"{len(files)} candidatos do Bing"
+                    )
+
+                    approved = False
+                    selected_file = None
+
+                    import shutil
+
+                    for candidate in files:
+
+                        print(
+                            f"    [L2-BING] Avaliando "
+                            f"{os.path.basename(candidate)}"
+                        )
+
+                        shutil.copy2(
+                            candidate,
+                            dest_path
+                        )
+
+                        if self._validate_asset(
+                            scene,
+                            dest_path,
+                            name
+                        ):
+
+                            approved = True
+                            selected_file = candidate
+                            break
+
+                    if not approved:
+                        print(
+                            "    [L2-BING] Nenhuma candidata aprovada"
+                        )
+                        continue
+
+                    print(
+                        f"    [L2-BING] Aprovada: "
+                        f"{os.path.basename(selected_file)}"
+                    )
+
+                    return dest_path
+
+                    continue
                     if i_hash and i_hash in self.used_hashes:
                         print(f"    [Dedup] {name}: duplicata da Cena {self.used_hashes[i_hash]:02d}. Rejeitando...")
                         self.used_urls.add(url)
@@ -2418,79 +2412,45 @@ class MediaResearchAgent:
                 time.sleep(0.2)
 
         # ── L2 estendido: bancos gratuitos adicionais (só os aprovados) ───────
-        for nome_extra in (
-            []
-            if search_limit_reached or not source_permissions["internet_images"]
-            else FREE_IMAGE_SOURCE_ORDER[:MAX_FREE_IMAGE_TENTATIVAS_POR_CENA]
-        ):
-            for q in image_queries:
-                if search_limit_reached:
-                    break
-                if not q:
-                    continue
-                print(f"    [WebSearch] {nome_extra} | Query: {q}")
-                result = _l2_free_image_source(q, dest_path, nome_extra,
-                                               exclude_urls=self.used_urls)
-                stock_candidates_checked += 1
-                if stock_candidates_checked >= self.stock_candidates_per_scene:
-                    search_limit_reached = True
-                    print(f"    [L2] Limite de {self.stock_candidates_per_scene} tentativas em bancos atingido; escalando para geração se esta candidata não servir.")
-                if not result:
-                    continue
-                url, lic = result
-                e_hash = _file_hash(dest_path)
-                if e_hash and e_hash in self.used_hashes:
-                    print(f"    [Dedup] {nome_extra}: duplicata da Cena {self.used_hashes[e_hash]:02d}. Rejeitando...")
-                    self.used_urls.add(url)
-                    try: os.remove(dest_path)
-                    except Exception: pass
-                    continue
-                if not self._validate_asset(scene, dest_path, nome_extra):
-                    self.used_urls.add(url)
-                    continue
-                print(f"    [L2-{nome_extra}] OK — licenca: {lic}")
-                print(f"    [WebSearch] Escolhido: {url} | Licença: {lic}")
-                self.used_urls.add(url)
-                if e_hash: self.used_hashes[e_hash] = sid
-                self.used_paths[dest_path] = sid
-                self._record_hit(nome_extra)
-                self._add_report(sid, 2, nome_extra, url, lic, dest_path, "image")
-                return dest_path
+        
 
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # NÍVEL 3 — Conteúdo IA público (Openverse, com proteção anti-duplicata)
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        for q in (
-            []
-            if search_limit_reached or not source_permissions["internet_images"]
-            else image_queries
-        ):
-            if not q:
-                continue
-            print(f"    [WebSearch] Openverse | Query: {q}")
-            result = _l3_openverse_image(q, dest_path, exclude_urls=self.used_urls)
-            if result:
-                url, lic = result
-                o_hash = _file_hash(dest_path)
-                if o_hash and o_hash in self.used_hashes:
-                    print(f"    [Dedup] Openverse: duplicata. Rejeitando...")
-                    self.used_urls.add(url)
-                    try: os.remove(dest_path)
-                    except Exception: pass
+        if False:
+
+            for q in (
+                []
+                if search_limit_reached or not source_permissions["internet_images"]
+                else image_queries
+            ):
+        
+                if not q:
                     continue
-                # Validação de compatibilidade imagem↔roteiro
-                if not self._validate_asset(scene, dest_path, "openverse"):
+                print(f"    [WebSearch] Openverse | Query: {q}")
+                result = _l3_openverse_image(q, dest_path, exclude_urls=self.used_urls)
+                if result:
+                    url, lic = result
+                    o_hash = _file_hash(dest_path)
+                    if o_hash and o_hash in self.used_hashes:
+                        print(f"    [Dedup] Openverse: duplicata. Rejeitando...")
+                        self.used_urls.add(url)
+                        try: os.remove(dest_path)
+                        except Exception: pass
+                        continue
+                    # Validação de compatibilidade imagem↔roteiro
+                    if not self._validate_asset(scene, dest_path, "openverse"):
+                        self.used_urls.add(url)
+                        continue
+                    print(f"    [L3-Openverse] OK — licenca: {lic}")
+                    print(f"    [WebSearch] Escolhido: {url} | Licença: {lic}")
                     self.used_urls.add(url)
-                    continue
-                print(f"    [L3-Openverse] OK — licenca: {lic}")
-                print(f"    [WebSearch] Escolhido: {url} | Licença: {lic}")
-                self.used_urls.add(url)
-                if o_hash: self.used_hashes[o_hash] = sid
-                self.used_paths[dest_path] = sid
-                self._record_hit("openverse")
-                self._add_report(sid, 3, "openverse", url, lic, dest_path, "image")
-                return dest_path
-            time.sleep(0.3)
+                    if o_hash: self.used_hashes[o_hash] = sid
+                    self.used_paths[dest_path] = sid
+                    self._record_hit("openverse")
+                    self._add_report(sid, 3, "openverse", url, lic, dest_path, "image")
+                    return dest_path
+                time.sleep(0.3)
 
         if not source_permissions["webchat"]:
             print(
@@ -2499,163 +2459,256 @@ class MediaResearchAgent:
             )
             return None
 
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # NÍVEL 4 — Geração distribuída entre provedores com perfis independentes.
-        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        # NÍVEL 4 — Gemini Web com até 3 tentativas e feedback da avaliação.
-        # L1-L3 continuam primeiro; cada imagem gerada precisa passar pelo avaliador.
-        base_prompt = ai_prompt or img_query or scene.get("descricao", f"Cena {sid}")
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # NÍVEL 4 — Busca web simples PRIMEIRO, geração por IA como fallback.
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # NOVO FLUXO (v3.13):
+        #   1. WebChat search (busca web) com query SIMPLES em inglês
+        #   2. AI generation (Gemini/WebChat) apenas como fallback
+        # 
+        # Rationale: WebChat pode buscar fotos reais existentes na web.
+        # Só geramos imagens novas se não encontrarmos fotos reais.
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        
+        # Monta query simples em inglês a partir do assunto visual da cena
+        simple_query = self._build_simple_search_query(scene)
+        print(f"    [L4] Query simples para busca web: '{simple_query[:100]}'")
+
         scene_context = str(scene.get("texto", "") or scene.get("descricao", "")).strip()
-        if scene_context:
-            base_prompt = (
-                f"{base_prompt}\n\nCONTEXTO OBRIGATÓRIO DA CENA (use para escolher o assunto): "
-                f"{scene_context}"
-            )
-        feedback = ""
-        generated = None
         available_providers = [
             provider for provider in self.generation_providers
             if not self._provider_disabled(provider)
         ]
         provider_order = _generation_provider_order(available_providers, sid)
+
+        # ── FASE 1: Busca web via WebChat (simples, sequencial) ─────────────
+        web_provider_module = None
+        try:
+            import web_image_providers as web_provider_module
+        except Exception as exc:
+            print(f"    [L4-Web] Integração web_image_providers indisponível: {exc}")
+
+        provider_labels = {
+            "dreamina": "CapCut Dreamina", "copilot": "Copilot", "chatgpt": "ChatGPT",
+            "grok": "Grok", "qwen": "Qwen", "meta_muse": "Meta Muse",
+        }
+
+        media_perms = getattr(self, "media_source_permissions", None) or {}
+        web_search_enabled = (
+            web_provider_module is not None
+            and getattr(self, "webchat_image_search", True)
+            and bool(media_perms.get("webchat", True))
+        )
+
+        if web_search_enabled:
+            web_providers = [p for p in provider_order if p != "gemini"]
+            for provider in web_providers:
+                label = provider_labels.get(provider, provider)
+                print(f"    [L4-Search] Tentando busca web via {label}...")
+                try:
+                    search_fn = web_provider_module.search_webchat_image
+                    generated = search_fn(
+                        query=simple_query,
+                        dest_path=dest_path,
+                        provider=provider,
+                    )
+                except Exception as exc:
+                    print(f"    [L4-Search] {label} falhou: {exc}")
+                    generated = None
+
+                if not generated or not os.path.isfile(dest_path):
+                    print(f"    [L4-Search] {label}: nenhuma imagem encontrada; tentando próximo provedor.")
+                    continue
+
+                generated_hash = _file_hash(dest_path)
+                if generated_hash and generated_hash in self.used_hashes:
+                    print(f"    [L4-Search] {label}: imagem duplicada; tentando próximo provedor.")
+                    try: Path(dest_path).unlink(missing_ok=True)
+                    except OSError: pass
+                    continue
+
+                if not self._validate_asset(scene, dest_path, f"{provider}_websearch"):
+                    print(f"    [L4-Search] {label}: imagem reprovada pelo avaliador; tentando próximo provedor.")
+                    try: Path(dest_path).unlink(missing_ok=True)
+                    except OSError: pass
+                    continue
+
+                url, lic = generated
+                if generated_hash:
+                    self.used_hashes[generated_hash] = sid
+                self.used_paths[dest_path] = sid
+                self._record_hit(f"{provider}_websearch")
+                self._add_report(sid, 4, f"{provider}_websearch", url, lic, dest_path, "web_search")
+                return dest_path
+
+        # ── FASE 2: Gemini generation (fallback se busca falhou) ─────────────
         preferred_provider = provider_order[0] if provider_order else ""
-        print(f"    [L4] Provedor preferencial da cena {sid:02d}: {preferred_provider} (distribuição paralela por perfil).")
-        max_gemini_attempts = max(1, min(3, int(os.environ.get("VF_GEMINI_RETRIES", "3"))))
-        generate_image = None
-        GeminiSessionError = RuntimeError
         if preferred_provider == "gemini":
+            print(f"    [L4-Gemini] Busca web falhou; tentando geração via Gemini...")
+            base_prompt = ai_prompt or img_query or scene.get("descricao", f"Cena {sid}")
+            if scene_context:
+                base_prompt = (
+                    f"{base_prompt}\n\nCONTEXTO OBRIGATÓRIO DA CENA (use para escolher o assunto): "
+                    f"{scene_context}"
+                )
+            feedback = ""
+            generated = None
+            generate_image = None
+            GeminiSessionError = RuntimeError
             try:
                 from gemini_webchat_image import GeminiSessionError, generate_image
             except Exception as exc:
                 print(f"    [L4-Gemini] Integração indisponível: {exc}")
                 generate_image = None
 
-        for attempt in range(1, max_gemini_attempts + 1):
-            if generate_image is None or gemini_attempted_early:
-                break
-            if attempt == 1:
-                prompt = base_prompt
-            else:
-                suggestions = scene.get("_visual_search_suggestions", [])
-                suggestion_text = ", ".join(str(x) for x in suggestions[:5]) if isinstance(suggestions, list) else ""
-                prompt = (
-                    f"{base_prompt}\n\nCORREÇÃO OBRIGATÓRIA após rejeição visual anterior: {feedback}\n"
-                    "Não repita a composição/objeto que foi rejeitado. Gere uma imagem que mostre "
-                    "diretamente os elementos exigidos na cena. Priorize os detalhes específicos "
-                    "do roteiro e evite assunto apenas genericamente relacionado."
-                )
-                if suggestion_text:
-                    prompt += f"\nTermos positivos sugeridos pelo avaliador: {suggestion_text}."
-            print(f"    [L4-Gemini] Tentativa {attempt}/{max_gemini_attempts} para cena {sid:02d}...")
-            output_capture = None
-            try:
-                output_capture = _ThreadTeeOutput()
-                with _GEMINI_OUTPUT_LOCK, contextlib.redirect_stdout(output_capture):
-                    with self._provider_locks["gemini"]:
-                        generated = generate_image(
-                            prompt=prompt,
-                            dest_path=dest_path,
-                            scene_id=sid,
-                            topic=getattr(self, "_current_topic", "documentario"),
-                            web_research_before_generation=getattr(
-                                self, "web_research_before_generation", True
-                            ),
-                            scene_text=scene_context,
-                            query=wm_query or query,
-                        )
-                if provider_limit_reached(output_capture.captured_text()):
-                    self._disable_provider("gemini", output_capture.captured_text())
+            max_gemini_attempts = max(1, min(3, int(os.environ.get("VF_GEMINI_RETRIES", "3"))))
+            for attempt in range(1, max_gemini_attempts + 1):
+                if generate_image is None or gemini_attempted_early:
+                    break
+                if attempt == 1:
+                    prompt = base_prompt
+                else:
+                    suggestions = scene.get("_visual_search_suggestions", [])
+                    suggestion_text = ", ".join(str(x) for x in suggestions[:5]) if isinstance(suggestions, list) else ""
+                    prompt = (
+                        f"{base_prompt}\n\nCORREÇÃO OBRIGATÓRIA após rejeição visual anterior: {feedback}\n"
+                        "Não repita a composição/objeto que foi rejeitado. Gere uma imagem que mostre "
+                        "diretamente os elementos exigidos na cena. Priorize os detalhes específicos "
+                        "do roteiro e evite assunto apenas genericamente relacionado."
+                    )
+                    if suggestion_text:
+                        prompt += f"\nTermos positivos sugeridos pelo avaliador: {suggestion_text}."
+                print(f"    [L4-Gemini] Tentativa {attempt}/{max_gemini_attempts} para cena {sid:02d}...")
+                output_capture = None
+                try:
+                    output_capture = _ThreadTeeOutput()
+                    with _GEMINI_OUTPUT_LOCK, contextlib.redirect_stdout(output_capture):
+                        with self._provider_locks["gemini"]:
+                            generated = generate_image(
+                                prompt=prompt,
+                                dest_path=dest_path,
+                                scene_id=sid,
+                                topic=getattr(self, "_current_topic", "documentario"),
+                                web_research_before_generation=getattr(
+                                    self, "web_research_before_generation", False  # Desligado para evitar loop
+                                ),
+                                scene_text=scene_context,
+                                query=wm_query or query,
+                            )
+                    if provider_limit_reached(output_capture.captured_text()):
+                        self._disable_provider("gemini", output_capture.captured_text())
+                        generated = None
+                        break
+                except GeminiSessionError as exc:
+                    print(f"    [L4-Gemini] Sessão indisponível; encerrando tentativas deste provider: {exc}")
+                    if provider_limit_reached(exc) or (
+                        output_capture and provider_limit_reached(output_capture.captured_text())
+                    ):
+                        self._disable_provider("gemini", str(exc))
                     generated = None
                     break
-            except GeminiSessionError as exc:
-                print(f"    [L4-Gemini] Sessão indisponível; encerrando tentativas deste provider: {exc}")
-                if provider_limit_reached(exc) or (
-                    output_capture and provider_limit_reached(output_capture.captured_text())
-                ):
-                    self._disable_provider("gemini", str(exc))
-                generated = None
-                break
-            except Exception as exc:
-                print(f"    [L4-Gemini] Falha na geração: {exc}")
-                if provider_limit_reached(exc) or (
-                    output_capture and provider_limit_reached(output_capture.captured_text())
-                ):
-                    self._disable_provider("gemini", str(exc))
-                generated = None
-            if not generated or not os.path.isfile(dest_path):
-                print(f"    [L4-Gemini] Não foi possível recuperar arquivo na tentativa {attempt}.")
-                continue
+                except Exception as exc:
+                    print(f"    [L4-Gemini] Falha na geração: {exc}")
+                    if provider_limit_reached(exc) or (
+                        output_capture and provider_limit_reached(output_capture.captured_text())
+                    ):
+                        self._disable_provider("gemini", str(exc))
+                    generated = None
+                if not generated or not os.path.isfile(dest_path):
+                    print(f"    [L4-Gemini] Não foi possível recuperar arquivo na tentativa {attempt}.")
+                    continue
 
-            generated_hash = _file_hash(dest_path)
-            if generated_hash and generated_hash in self.used_hashes:
-                print(f"    [L4-Gemini] Imagem duplicada; tentando outra geração.")
-                try: os.remove(dest_path)
-                except OSError: pass
-                feedback = "A imagem anterior era duplicada de outra cena; gere uma composição diferente."
-                continue
+                generated_hash = _file_hash(dest_path)
+                if generated_hash and generated_hash in self.used_hashes:
+                    print(f"    [L4-Gemini] Imagem duplicada; tentando outra geração.")
+                    try: os.remove(dest_path)
+                    except OSError: pass
+                    feedback = "A imagem anterior era duplicada de outra cena; gere uma composição diferente."
+                    continue
 
-            # Limpa feedback anterior para que a validação desta tentativa preencha o novo.
-            try:
-                self._last_visual_feedback = ""
-            except Exception:
-                pass
-            if not self._validate_asset(scene, dest_path, "gemini_webchat"):
-                feedback = str(getattr(self, "_last_visual_feedback", "") or
-                               "A imagem não foi aprovada na avaliação visual. Gere outra imagem específica.")
-                print(f"    [L4-Gemini] Reprovada; motivo para nova tentativa: {feedback[:350]}")
-                try: os.remove(dest_path)
-                except OSError: pass
-                generated = None
-                continue
+                try:
+                    self._last_visual_feedback = ""
+                except Exception:
+                    pass
+                if not self._validate_asset(scene, dest_path, "gemini_webchat"):
+                    feedback = str(getattr(self, "_last_visual_feedback", "") or
+                                   "A imagem não foi aprovada na avaliação visual. Gere outra imagem específica.")
+                    print(f"    [L4-Gemini] Reprovada; motivo para nova tentativa: {feedback[:350]}")
+                    try: os.remove(dest_path)
+                    except OSError: pass
+                    generated = None
+                    continue
 
-            url, lic = generated
-            if generated_hash:
-                self.used_hashes[generated_hash] = sid
-            self.used_paths[dest_path] = sid
-            self._record_hit("gemini_webchat")
-            self._add_report(sid, 4, "gemini_webchat", url, lic, dest_path, "ai_generated")
-            return dest_path
+                url, lic = generated
+                if generated_hash:
+                    self.used_hashes[generated_hash] = sid
+                self.used_paths[dest_path] = sid
+                self._record_hit("gemini_webchat")
+                self._add_report(sid, 4, "gemini_webchat", url, lic, dest_path, "ai_generated")
+                return dest_path
 
-        if (
-            getattr(self, "gemini_only", False)
-            and not (
-                getattr(self, "gemini_fallback", True)
-                and self._provider_disabled("gemini")
-            )
-        ):
-            print("    [Gemini] Modo Gemini prioritário ativo; sem fallback para outro gerador de imagem.")
-            return None
+            print(f"    [L4-Gemini] Gemini não entregou imagem aprovada para a cena {sid:02d}; ela permanece pendente.")
+        else:
+            print(f"    [L4] Busca web falhou e Gemini não é o provedor preferencial; cena {sid:02d} permanece pendente.")
+
+        # Limpeza
+        try:
+            if os.path.exists(dest_path): os.remove(dest_path)
+        except OSError:
+            pass
+        return None
 
         # Demais provedores usam perfis diferentes e podem gerar em paralelo para
         # cenas distintas. Um lock por provedor evita duas cenas no mesmo perfil.
         web_provider_module = None
         try:
             import web_image_providers as web_provider_module
-            generate_web_image = web_provider_module.generate_image
+            # Modo webchat_only: apenas busca e download, sem geração Gemini
+            media_cfg = self.cfg.get("media", {}) if self.cfg else {}
+            media_source_mode = media_cfg.get("media_source_mode", "local_only")
+            do_webchat_search = (
+                media_cfg.get("webchat_image_search", True)
+                and media_source_mode != "webchat_only"
+            )
+            generate_web_image = (
+                getattr(web_provider_module, "generate_image", None) if do_webchat_search else None
+            )
+            search_webchat_fn = (
+                getattr(web_provider_module, "search_webchat_image", None) if do_webchat_search else None
+            )
         except Exception as exc:
             print(f"    [L4-Web] Integração de fallback indisponível: {exc}")
             generate_web_image = None
+            search_webchat_fn = None
 
         provider_labels = {
             "dreamina": "CapCut Dreamina", "copilot": "Copilot", "chatgpt": "ChatGPT",
             "grok": "Grok", "qwen": "Qwen", "meta_muse": "Meta Muse",
         }
+        # Query simples em inglês para busca web (não usar prompt complexo)
+        simple_query = self._build_simple_search_query(scene)
+
         for provider in (item for item in provider_order if item != "gemini"):
-            if generate_web_image is None:
+            if generate_web_image is None and search_webchat_fn is None:
                 break
             label = provider_labels[provider]
             print(f"    [L4-{label}] Gemini não entregou imagem aprovada; tentando {label}...")
             try:
-                with self._provider_locks[provider]:
+                # PRIMEIRO: tenta busca web simples com query direta
+                if search_webchat_fn is not None:
+                    generated = search_webchat_fn(
+                        query=simple_query,  # Query SIMPLES em inglês
+                        dest_path=dest_path,
+                        provider=provider,
+                    )
+                else:
                     generated = generate_web_image(
                         provider=provider,
                         prompt=base_prompt,
                         dest_path=dest_path,
                         scene_id=sid,
                         topic=getattr(self, "_current_topic", "documentario"),
-                        web_research_before_generation=getattr(
-                            self, "web_research_before_generation", True
-                        ),
+                        web_research_before_generation=False,  # Desligado, já fizemos busca
                         scene_text=scene_context,
                         query=wm_query or query,
                     )
@@ -2690,9 +2743,9 @@ class MediaResearchAgent:
             if generated_hash:
                 self.used_hashes[generated_hash] = sid
             self.used_paths[dest_path] = sid
-            source_name = f"{provider}_webchat"
+            source_name = f"{provider}_websearch"
             self._record_hit(source_name)
-            self._add_report(sid, 4, source_name, url, lic, dest_path, "ai_generated")
+            self._add_report(sid, 4, source_name, url, lic, dest_path, "web_search")
             return dest_path
 
         print(f"    [L4] Gemini, CapCut Dreamina e Copilot não entregaram imagem aprovada para a cena {sid:02d}; ela permanece pendente.")
@@ -2701,6 +2754,280 @@ class MediaResearchAgent:
         except OSError:
             pass
         return None
+    # ── Retentativa com queries limpas para cenas pendentes ────────────────────
+
+    def _build_clean_web_query(self, scene: dict) -> str:
+        """
+        Gera uma query de busca web SIMPLES e DIRETA, focada apenas no assunto principal.
+
+        CORREÇÃO v3.12: O prompt anterior acumulava too much information (texto da cena,
+        query em inglês, query em português, palavras-chave, hints visuais, etc.), o que
+        tornava a busca muito restrita e frequentemente gerava apenas o PIL fallback.
+
+        Agora a query é apenas: "procure em sites da web e me traga SOMENTE imagens ou gráficos ou desenhos ou fotos relativos a: [assunto principal] , nao quero saber o site de origem quero somente VER imagems aqui!".
+        """
+        # 1. Extrai o assunto principal do texto da cena
+        texto = str(scene.get("texto", "") or scene.get("descricao", "") or "").strip()
+
+        # 2. Usa palavras-chave visuais extraídas do texto (já existente no código)
+        keywords = _extract_visual_keywords(texto, max_keywords=3)
+
+        # 3. Monta a query simples: "procure na web [assunto] fotos reais"
+        if keywords:
+            # Pega as 2 palavras-chave mais longas (mais específicas)
+            keywords_sorted = sorted(keywords, key=len, reverse=True)[:2]
+            assunto = " ".join(keywords_sorted)
+        else:
+            # Fallback: usa a primeira linha do texto ou a descrição
+            assunto = texto.split(".")[0][:80] if texto else str(scene.get("descricao", "cena"))[:80]
+
+        # 4. Query simples e direta
+        query = f"procure em sites da web e me traga SOMENTE imagens ou gráficos ou desenhos ou fotos relativos a:  {assunto} , nao quero saber o site de origem quero somente VER imagems aqui!"
+        return query
+
+    def _build_simple_search_query(self, scene: dict) -> str:
+    """
+    Extrai uma query visual específica para Bing.
+    Prioridade:
+    1) Eventos históricos
+    2) Sistemas/Invenções
+    3) Pessoas
+    4) Conceitos
+    5) Fallback
+    """
+
+    import re
+
+    texto = str(
+        scene.get("texto", "")
+        or scene.get("descricao", "")
+        or ""
+    ).strip()
+
+    if not texto:
+        return "historical documentary"
+
+    texto_lower = texto.lower()
+
+    # --------------------------------------------------
+    # EVENTOS / SISTEMAS IMPORTANTES
+    # --------------------------------------------------
+
+    eventos = {
+        "logic theorist": "Logic Theorist AI program",
+        "deep blue": "Deep Blue chess computer",
+        "alexnet": "AlexNet neural network",
+        "dartmouth": "Dartmouth Conference 1956",
+        "enigma": "Enigma machine",
+        "segunda guerra mundial": "World War II codebreaking",
+        "criptoanálise": "Bletchley Park codebreaking",
+    }
+
+    for chave, query in eventos.items():
+
+        if chave in texto_lower:
+
+            print(
+                f"[QUERY DEBUG] Evento detectado => {query}",
+                flush=True
+            )
+
+            return query
+
+    # --------------------------------------------------
+    # PESSOAS
+    # --------------------------------------------------
+
+    nomes = re.findall(
+        r'\b[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+'
+        r'(?:\s+[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+){1,3}',
+        texto
+    )
+
+    blacklist = {
+        "Inteligência Artificial",
+        "Segunda Guerra Mundial",
+        "Primeira Guerra Mundial",
+    }
+
+    for nome in nomes:
+
+        if nome not in blacklist:
+
+            query = f"{nome} portrait"
+
+            print(
+                f"[QUERY DEBUG] Pessoa => {query}",
+                flush=True
+            )
+
+            return query
+
+    # --------------------------------------------------
+    # CONCEITOS IMPORTANTES
+    # --------------------------------------------------
+
+    conceitos = {
+        "redes neurais": "early neural network diagram",
+        "rede neural": "early neural network diagram",
+        "neurônio artificial": "artificial neuron diagram",
+        "memória": "early computer memory",
+        "processamento": "mainframe computer room",
+        "computador eletrônico": "early computer laboratory",
+        "autômatos": "ancient automaton machine",
+        "autômato": "ancient automaton machine",
+    }
+
+    for chave, query in conceitos.items():
+
+        if chave in texto_lower:
+
+            print(
+                f"[QUERY DEBUG] Conceito => {query}",
+                flush=True
+            )
+
+            return query
+
+    # --------------------------------------------------
+    # FALLBACK
+    # --------------------------------------------------
+
+    palavras = re.findall(
+        r'\b[a-zA-ZÀ-ÿ]{5,}\b',
+        texto
+    )
+
+    stopwords = {
+        "durante",
+        "através",
+        "entretanto",
+        "também",
+        "porque",
+        "quando",
+        "essas",
+        "esses",
+        "aquela",
+        "aquele",
+        "inteligência",
+        "artificial",
+        "computadores",
+    }
+
+    palavras = [
+        p
+        for p in palavras
+        if p.lower() not in stopwords
+    ]
+
+    query = " ".join(palavras[:4])
+
+    if not query:
+        query = "historical technology"
+
+    print(
+        f"[QUERY DEBUG] Fallback => {query}",
+        flush=True
+    )
+
+    return query[:120]
+
+    def _retry_pending_with_clean_queries(self, scenes: List[dict], asset_map: Dict[int, str]) -> None:
+        """
+        Retenta a busca de mídia para cenas que caíram no PIL fallback (card de texto animado).
+
+        CORREÇÃO v3.12: Cenas que não encontraram mídia real são automaticamente
+        reprocessadas com queries web simplificadas, evitando que o vídeo final fique
+        com cards de texto em vez de imagens reais.
+
+        Args:
+            scenes: Lista de cenas
+            asset_map: Mapa de assets já adquiridos (será atualizado)
+        """
+        if not self.pending_scene_ids:
+            return
+        # Evita loop infinito de reprocessamento
+        if not hasattr(self, "scene_retry_count"):
+            self.scene_retry_count = {}
+
+        if not hasattr(self, "max_scene_retries"):
+            self.max_scene_retries = 2
+        print(f"\n  [RETRY] {len(self.pending_scene_ids)} cenas sem mídia real. Retentando com queries simplificadas...")
+
+        for scene_id in list(self.pending_scene_ids):
+            retries = self.scene_retry_count.get(scene_id, 0)
+
+            if retries >= self.max_scene_retries:
+                print(
+                    f"    [RETRY] Cena {scene_id:02d}: "
+                    f"limite ({self.max_scene_retries}) atingido."
+                )
+                continue
+
+            self.scene_retry_count[scene_id] = retries + 1
+
+            print(
+                f"    [RETRY] Cena {scene_id:02d}: "
+                f"tentativa {retries + 1}/{self.max_scene_retries}"
+            )
+            retries = self.scene_retry_count.get(scene_id, 0)
+
+            if retries >= self.max_scene_retries:
+                print(
+                    f"    [RETRY] Cena {scene_id:02d}: "
+                    f"limite de tentativas atingido."
+                )
+                continue
+
+            self.scene_retry_count[scene_id] = retries + 1
+            scene = next((s for s in scenes if s["id"] == scene_id), None)
+            if not scene:
+                continue
+
+            # Gera query limpa e direta
+            clean_query = self._build_clean_web_query(scene)
+            print(f"    [RETRY] Cena {scene_id:02d}: query simplificada = '{clean_query[:80]}...'")
+
+            # Atualiza a query da cena
+            old_query = scene.get("query", "")
+            scene["query"] = clean_query
+            scene["wikimedia_q"] = clean_query
+
+            # Remove o PIL fallback anterior se existir
+            old_dest = self._dest_path(scene)
+            if os.path.exists(old_dest):
+                try:
+                    os.remove(old_dest)
+                except OSError:
+                    pass
+
+            # Tenta buscar novamente
+            new_path = self.source_scene(scene)
+            if new_path:
+                asset_map[scene_id] = new_path
+                print(f"    [RETRY] ✓ Cena {scene_id:02d}: mídia real encontrada!")
+                self.pending_scene_ids.remove(scene_id)
+            else:
+                scene["query"] = old_query
+                scene["wikimedia_q"] = old_query
+
+                print(
+                    f"    [RETRY] ✗ Cena {scene_id:02d}: "
+                    f"ainda sem mídia real."
+                )
+
+                if self.scene_retry_count.get(scene_id, 0) >= self.max_scene_retries:
+                    if scene_id in self.pending_scene_ids:
+                        self.pending_scene_ids.remove(scene_id)
+
+                    print(
+                        f"    [RETRY] Cena {scene_id:02d}: "
+                        f"removida da fila."
+                    )
+
+                if scene_id in self.pending_scene_ids:
+                    self.pending_scene_ids.remove(scene_id)
+
     # ── Batch com Auditoria Final Anti-Duplicata ─────────────────────────────
 
     def regenerate_scene(
@@ -2799,14 +3126,19 @@ class MediaResearchAgent:
         Adquire mídia para todas as cenas. Retorna asset_map {scene_id: path}.
         No modo local-only, qualquer cena sem imagem aprovada interrompe a produção.
         Executa auditoria final de exclusividade (Regra de Ouro Anti-Duplicata).
+
+        CORREÇÃO v3.12: Cenas que recebem PIL fallback (card com texto animado)
+        são automaticamente reprocessadas com queries web simplificadas, evitando
+        que o vídeo final fique com cards de texto em vez de imagens reais.
         """
         # Define tópico para o avaliador de imagens
         self._current_topic = topic or "documentario"
-        
+
         os.makedirs(self.videos_dir,  exist_ok=True)
         os.makedirs(self.imagens_dir, exist_ok=True)
 
         asset_map: Dict[int, str] = {}
+        pending_after_first_pass: List[int] = []
         total = len(scenes)
         cached_clip_scene_ids = set()
         if (
@@ -2845,8 +3177,17 @@ class MediaResearchAgent:
                 + "=" * 55
             )
 
+        # Conjunto para rastrear cenas já tentadas nesta execução (evita loop infinito)
+        attempted_scene_ids: set = set()
+
         for idx, scene in enumerate(scenes, 1):
             sid = scene["id"]
+            # Pula cenas já tentadas anteriormente neste run para evitar loop
+            if sid in attempted_scene_ids:
+                print(
+                    f"    [SKIP] Cena {sid:02d} já foi tentativa anterior; pulando."
+                )
+                continue
             if sid in cached_clip_scene_ids and not self._asset_valid(
                 self._dest_path(scene), scene["tipo"] == "video"
             ):
@@ -2854,11 +3195,13 @@ class MediaResearchAgent:
                     f"    [RESUME] Cena {sid:02d} já tem clipe renderizado; "
                     "não repetir busca nem geração de mídia."
                 )
+                attempted_scene_ids.add(sid)
                 continue
             print(f"\n  [{idx:02d}/{total:02d}] Pesquisando midia para cena {sid:02d}...")
             path = self.source_scene(scene)
             if path:
                 asset_map[sid] = path
+                attempted_scene_ids.add(sid)
 
         local_only = (
             getattr(self, "media_source_mode", "legacy") == "local_only"
@@ -2974,6 +3317,16 @@ class MediaResearchAgent:
             dups_fixed = self._enforce_final_uniqueness(scenes, asset_map)
         if dups_fixed > 0:
             print(f"\n  [Dedup] {dups_fixed} mídias duplicadas corrigidas → 100% exclusivas.")
+
+        # ══════════════════════════════════════════════════════════════════════
+        # CORREÇÃO v3.12: Retentativa automática para cenas que caíram no PIL fallback
+        # ══════════════════════════════════════════════════════════════════════
+        # Cenas que não encontraram mídia real e usaram o PIL card (texto animado)
+        # são automaticamente reprocessadas com queries web simplificadas.
+        # Isso evita que o vídeo final fique com cards de texto em vez de imagens reais,
+        # o que prejudica a visualização no YouTube.
+        if self.pending_scene_ids and not local_only:
+            self._retry_pending_with_clean_queries(scenes, asset_map)
 
         # Salva preferências aprendidas nesta execução
         self._save_prefs()

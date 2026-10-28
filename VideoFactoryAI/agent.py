@@ -82,6 +82,7 @@ import os             # Operações de sistema de arquivos e caminhos
 import sys            # Acesso a argumentos de linha de comando e encerramento
 import json           # Leitura e gravação de arquivos de dados JSON
 import time           # Contagem de tempo de execução do pipeline
+import hashlib
 import shutil         # Operações de cópia e limpeza de diretórios
 import argparse       # Parser profissional de opções de linha de comando
 import asyncio        # Suporte a rotinas assíncronas (usado pelo Edge-TTS)
@@ -104,6 +105,29 @@ from pipeline_resume import (
 # =============================================================================
 # Usamos blocos try/except para importar cada agente. Se alguma biblioteca opcional
 # não estiver instalada, o sistema não falha na inicialização do script ou no --help.
+
+#agente usando ollama para criar busca de iamgem com texto sugestivo / adequado
+QWEN_CACHE_FILE = Path("qwen_visual_queries.json")
+
+
+def _load_qwen_cache():
+    if QWEN_CACHE_FILE.exists():
+        try:
+            return json.loads(QWEN_CACHE_FILE.read_text(encoding="utf-8"))
+        except:
+            return {}
+    return {}
+
+
+def _save_qwen_cache(cache):
+    try:
+        QWEN_CACHE_FILE.write_text(
+            json.dumps(cache, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+    except Exception:
+        pass
+
 
 # Agente de Pesquisa Hierárquica de Mídia (L1 a L4 com compliance)
 _MRA_AVAILABLE = False
@@ -223,7 +247,109 @@ if _ffmpeg_found is None:
         "\nInstale ffmpeg/bin/ffmpeg.exe na raiz do workspace ou adicione FFmpeg ao PATH."
     )
 ffmpeg_path = str(_ffmpeg_found)
-    
+
+def generate_visual_query_with_qwen(scene_text: str) -> str:
+    """
+    Converte uma cena em uma query visual curta.
+    Usa Qwen 2.5 3B local via Ollama.
+    """
+
+    if not scene_text:
+        return ""
+
+    cache = _load_qwen_cache()
+
+    cache_key = hashlib.md5(
+        scene_text.strip().encode("utf-8")
+    ).hexdigest()
+
+    if cache_key in cache:
+        return cache[cache_key]
+
+    prompt = f"""
+You are an expert documentary visual researcher.
+
+Convert the narration into a SHORT image search query.
+
+RULES:
+- English
+- Maximum 8 words
+- Focus on visual subject
+- Historical figures should be prioritized
+- Historical inventions should be prioritized
+- No explanation
+- No quotes
+- Return only the query
+
+Narration:
+
+{scene_text}
+"""
+
+    try:
+
+        result = subprocess.run(
+            [
+                "ollama",
+                "run",
+                "qwen2.5-coder:3b"
+            ],
+            input=prompt.encode("utf-8"),
+            capture_output=True,
+            timeout=60
+        )
+        output = result.stdout.decode(
+            "utf-8",
+            errors="replace"
+        ).strip()
+        query = result.stdout.strip()
+        query = query.split("\n")[0]
+
+        query = query.replace(",", " ")
+
+        query = " ".join(query.split())
+
+        words = query.split()
+
+        query = " ".join(words[:6])
+        query = query.replace('"', "")
+        query = query.replace("'", "")
+        query = query.replace("\n", " ")
+
+        if query:
+
+            cache[cache_key] = query
+
+            _save_qwen_cache(cache)
+
+            print(
+                f"[QWEN QUERY] {query}",
+                flush=True
+            )
+
+            return query
+
+    except Exception as e:
+
+        print(
+            f"[QWEN ERRO] {e}",
+            flush=True
+        )
+
+    return ""
+def extract_historical_person(scene_text: str):
+
+    import re
+
+    names = re.findall(
+        r'\b([A-ZÁÀÂÃÉÈÊÍÓÔÕÚÇ][a-záàâãéèêíóôõúç]+(?:\s+[A-ZÁÀÂÃÉÈÊÍÓÔÕÚÇ][a-záàâãéèêíóôõúç]+)+)\b',
+        scene_text
+    )
+
+    if names:
+        return names[0]
+
+    return None
 # Importa módulos de áudio e vídeo existentes na codebase (sem qualquer modificação neles)
 def _carregar_vf_env() -> None:
     """Lê VideoFactoryAI/vf.env (uma linha CHAVE=valor). Não sobrescreve variáveis já definidas.
@@ -1163,93 +1289,11 @@ THEMATIC_VISUAL_MAP = {
     ],
 }
 
-
-def _extract_visual_keywords(text: str, max_keywords: int = 8) -> List[str]:
-    """
-    Extrai palavras-chave visuais relevantes do texto de uma cena para busca de mídia.
-    Foca em substantivos concretos, objetos, ações visuais, materiais, técnicas.
-    """
-    if not text:
-        return []
-    
-    import re
-    found_keywords = set()
-    text_lower = text.lower()
-    
-    # Palavras-chave visuais específicas de modelismo/ferreomodelismo
-    visual_terms = [
-        "XPS", "isopor", "poliestireno", "espuma", "espuma PU", "cola PVA", "cola de contato", 
-        "silicone", "epoxi", "resina", "hydrocal", "gesso", "plaster", "plaster cloth", 
-        "gesso cimento", "massa de modelar", "argila", "moldes de silicone", "rock molds", 
-        "moldes de rocha", "cortica", "EVA", "EVA denso", "roadbed", "leito", "sub-leito", 
-        "subleito", "compensado", "compensado naval", "madeira", "pinus", "pinus aplainado", 
-        "ripas", "travessas", "longarinas", "elevadores", "risers", "estrutura", 
-        "grade aberta", "open grid", "L-girder", "benchwork", "bancada",
-        "trilho", "trilhos", "flex track", "trilho flexivel", "code 83", "code 100", 
-        "code 70", "rail", "dormente", "dormentes", "ties", "sleepers", "juncao", "juntas", 
-        "rail joiners", "uniao", "solda", "soldagem", "ferro de solda", "estanho", "fluxo",
-        "lastro", "ballast", "ballasting", "cortica bisotada", "bisotada", "EVA denso", 
-        "cascalho", "pedra", "grao", "grnulos", "areia", "wet water", "agua molhada", 
-        "cola de lastro", "PVA", "detergente", "capilaridade", "absorcao",
-        "poliestireno extrudado", "isopor extrudado", "espuma rigida", "cortador termico", 
-        "hot wire", "hot wire cutter", "fio quente", "cortador de fio", "esculpir", 
-        "surform", "raspadeira", "lixar", "lixadeira",
-        "rocha", "rochas", "rock", "rock molds", "moldes de rocha", "silicone", 
-        "borracha de silicone", "hydrocal", "plaster", "gesso pedra", "gesso tipo Hydrocal", 
-        "gesso odontologico", "moldes", "casting", "casting de rocha", "fundicao", 
-        "pintura de rocha", "wash", "washes", "lavagem", "lixiviacao", "drybrush", 
-        "dry brush", "escovacao a seco", "pigmento", "pigmentos", "pastel", "giz pastel", 
-        "fuligem", "ferrugem", "terra seca", "poeira", "verniz fosco", "dullcote", "Testors",
-        "static grass", "grama estatica", "aplicador eletrostatico", "static grass applicator", 
-        "eletrostatico", "eletrostatica", "campo eletrostatico", "fibras", "fibras de nylon", 
-        "fibras sinteticas", "grama baixa", "pasto", "capim alto", "mato queimado", 
-        "verde claro", "verde oliva", "palha seca", "cola PVA", "clipe jacare", "terra", 
-        "aspirador", "meia-calca",
-        "aerografo", "airbrush", "air brush", "compressor", "bico 0.2", "bico 0.3", 
-        "dupla acao", "tinta acrilica", "marrom escuro", "cinza escuro", "Railboard Brown", 
-        "Dark Rust", "preto fosco", "diluiu", "aguarras", "white spirit", "aguarras mineral", 
-        "pincel", "pincel umedecido", "burnt sienna", "ferrugem", "fuligem", "escapamento", 
-        "chamine", "exaustor", "exaustao a diesel",
-        "LED", "SMD", "0805", "0603", "branco quente", "2700K", "lampada incandescente", 
-        "iluminacao interior", "light leak", "light bleed", "vazamento de luz", 
-        "preto fosco", "black paint", "interior", "edificio", "predio", "casas", "casario", 
-        "vilarejo", "cidade", "posta de iluminacao", "poste", "luz", "fiacao", 
-        "fio elastico", "fio de poliuretano", "costura",
-        "vegetacao", "vegetacao rasteira", "arbustos", "esponja triturada", "cinzenta", 
-        "Clump Foliage", "foliage", "arbustos", "margens", "margem", "trilhos", 
-        "postes", "iluminacao", "fiacao telefonica", "fio elastico", "fio de poliuretano", 
-        "esticar", "quebrar", "toque acidental",
-        "transicao", "crepusculo", "iluminacao", "sequencia", "sequencia de luzes", 
-        "estudio", "luzes", "casas", "locomotivas", "acendem", "acender", 
-        "Busca de Imagem", "Referencia", "HO scale", "building", "LED", "interior", 
-        "lighting", "light bleed", "prevention",
-        "marcenaria", "tripe", "softbox", "duplo", "pleno aberto", "zenital", "90", 
-        "trilhos", "solda", "lente macro", "90mm", "100mm", "luz pontual", "ring light", 
-        "super close-up", "close-up", "45", "relevo", "rochas", "gimbal", "portatil", 
-        "camera na mao", "luz lateral", "unica", "sombras", "plano medio", "perfil", 
-        "lastro", "grama", "lente macro", "slider", "luz difusa", "alta fidelidade", 
-        "CRI 95+", "rasante", "nivel dos trilhos", "weathering", "camera", "mesa", 
-        "estudio", "luz fria", "neutra", "sem reflexos", "plano fechado", "mao", "artesao", 
-        "close-up", "plano fechado", "cenas finais", "lente probe", "mini camera", 
-        "luz conica", "propria maquete", "visao do maquinista", "cab view",
-    ]
-    
-    import re
-    found_keywords = set()
-    text_lower = text.lower()
-    
-    for term in visual_terms:
-        if term.lower() in text_lower:
-            found_keywords.add(term)
-    
-    tech_compounds = re.findall(r'\b(?:model railroad|model railroader|model rail|HO scale|N scale|O scale|code 83|code 100|code 70|flex track|trilho flex|code 83|code 100|code 70|dormente|dormentes|lastro|ballast|ballasting|XPS|isopor|poliestireno|hydrocal|gesso|plaster|rock molds|moldes de rocha|static grass|static grass applicator|aplicador eletrostatico|aerografo|airbrush|weathering|drybrush|dry brush|wash|washes|pigmento|pigmentos|static grass|grama estatica|lastro|ballast|cortica|EVA|roadbed|leito|sub-leito|subleito|compensado|compensado naval|madeira|pinus|pinus aplainado|ripas|travessas|longarinas|elevadores|risers|estrutura|grade aberta|open grid|L-girder|benchwork|bancada|trilho|trilhos|flex track|trilho flexivel|code 83|code 100|code 70|rail|dormente|dormentes|ties|sleepers|juncao|juntas|rail joiners|uniao|solda|soldagem|ferro de solda|estanho|fluxo|XPS|isopor|isopor extrudado|poliestireno|espuma|espuma PU|cola PVA|cola de contato|silicone|epoxi|resina|hydrocal|gesso|plaster|plaster cloth|gesso cimento|massa de modelar|argila|silicone moldes|moldes de silicone|rock molds|moldes de rocha|gesso cimento|massa de modelar|argila)\b', text_lower)
-    
-    for tc in tech_compounds:
-        if len(tc) > 3:
-            found_keywords.add(tc)
-    
-    keywords = sorted(list(found_keywords), key=len, reverse=True)
-    return keywords[:max_keywords]
+def _extract_visual_keywords(
+    text: str,
+    max_keywords: int = 8
+):
+    return []
 
 
 def _get_topic_visual_fallback(topic: str, canal: str, scene_idx: int, used_queries: Optional[set] = None, scene_text: str = "") -> Tuple[str, str, str, str, bool]:
@@ -1264,7 +1308,12 @@ def _get_topic_visual_fallback(topic: str, canal: str, scene_idx: int, used_quer
     
     # Extrai palavras-chave visuais do texto da cena
     visual_keywords = _extract_visual_keywords(scene_text) if scene_text else []
-    
+    print(
+        f"[FALLBACK DEBUG] cena={scene_idx} "
+        f"keywords={visual_keywords} "
+        f"texto={scene_text[:120]}",
+        flush=True
+    )
     # Helper: check if any visual keyword matches
     def has_visual_keyword(*keywords):
         return any(kw in visual_keywords for kw in keywords)
@@ -1313,14 +1362,32 @@ def _get_topic_visual_fallback(topic: str, canal: str, scene_idx: int, used_quer
         # Procura o primeiro plano da paleta que ainda não foi utilizado neste vídeo
         for tipo_p, q_p in palette:
             if q_p not in used:
-                return tipo_p, q_p, "", f"Cinematic documentary shot: {q_p}", False
+                #return tipo_p, q_p, "", f"Cinematic documentary shot: {q_p}", False
+                query_real = scene_text[:300]
+
+                return (
+                    tipo_p,
+                    query_real,
+                    "",
+                    query_real,
+                    False
+            )
         
         # Caso ultrapasse 24 cenas, sintetiza novos ângulos únicos
         modifiers = ["wide panoramic view", "detailed close up macro", "cinematic golden hour sunset", "aerial drone landscape perspective", "peaceful quiet morning mist"]
         mod = modifiers[(scene_idx - 1) % len(modifiers)]
         tipo_gen = "video" if (scene_idx % 2 == 1) else "image"
         q_gen = f"peaceful rural countryside {mod} cinematic scene {scene_idx}"
-        return tipo_gen, q_gen, "", f"Cinematic shot: {q_gen}", False
+        #return tipo_gen, q_gen, "", f"Cinematic shot: {q_gen}", False
+        query_real = scene_text [:300]
+
+        return (
+            tipo_gen,
+            query_real,
+            "",
+            query_real,
+            False
+        )
 
     # 2. Contos, Folclore e Literatura (ex: João e o pé de feijão)
     if matches_topic_or_visual("feijão", "feijao", "conto", "lenda", "fadas", "história de"):
@@ -1343,23 +1410,8 @@ def _get_topic_visual_fallback(topic: str, canal: str, scene_idx: int, used_quer
                 return tipo_p, q_p, "", f"Cinematic fantasy documentary: {q_p}", False
 
     # 3. Tecnologia e Inovação
-    if canal_key == "tecnologia" or matches_topic_or_visual("tecnologia", "inteligência", "ia", "computador", "futuro"):
-        palette = [
-            ("video", "modern technology digital data screen server futuristic"),
-            ("image", "vintage computer laboratory 1960s scientists research"),
-            ("video", "fiber optic data transmission glowing lights internet"),
-            ("image", "futuristic neural network artificial intelligence visualization"),
-            ("video", "silicon microchip processor glowing circuit board macro"),
-            ("image", "robot mechanical hand touching human fingertip future"),
-            ("video", "data center blue led blinking server racks tech"),
-            ("image", "computer programmer typing code dark room multiple screens"),
-            ("video", "satellite orbiting planet earth space communication digital"),
-            ("image", "quantum computing laser laboratory physics research"),
-        ]
-        for tipo_p, q_p in palette:
-            if q_p not in used:
-                return tipo_p, q_p, "", f"Cinematic tech documentary: {q_p}", False
-
+    if False:
+        pass
     # 4. Segunda Guerra Mundial / História Militar (ESPECÍFICO - antes do genérico)
     if matches_topic_or_visual("segunda guerra", "guerra mundial", "ww2", "1939", "1945", "hitler", "churchill", "stalingrado", "normandia", "pearl harbor", "hiroshima", "nagasaki", "holocausto", "berlim", "blitzkrieg", "barbarossa", "midway", "el alamein", "kursk", "dunkerque", "versalhes", "nazismo", "fascismo", "eixo", "aliados", "resistência", "partisans"):
         palette = [
@@ -1444,23 +1496,62 @@ def _get_topic_visual_fallback(topic: str, canal: str, scene_idx: int, used_quer
     # Adiciona variações baseadas no topic
     clean_topic = re.sub(r"[^\w\s]", "", topic).strip() or "documentary"
     search_topic = "HO scale model railroad" if model_rail_context else clean_topic
-    dynamic_queries.extend([
-        f"{search_topic} cinematic documentary footage",
-        f"{search_topic} close up detail macro",
-        f"{search_topic} wide shot golden hour",
-    ])
+    scene_text = (scene_text or "").strip()
+
+    if scene_text:
+        dynamic_queries.insert(
+            0,
+            scene_text[:250]
+        )
     
+    scene_text = (scene_text or "").strip()
+
+
+    person = extract_historical_person(scene_text)
+
+    if person:
+
+        query = f"{person} portrait historical"
+
+        return (
+            "image",
+            query,
+            "",
+            query,
+            False
+        )
+
+    qwen_query = generate_visual_query_with_qwen(scene_text)
+
+    if qwen_query:
+
+        return (
+            "image",
+            qwen_query,
+            "",
+            qwen_query,
+            False
+        )
+
+    return (
+        "image",
+        scene_text[:120],
+        "",
+        scene_text[:120],
+        False
+    )
+
     for tipo_p, q_p in [("video", q) if i % 2 == 0 else ("image", q) for i, q in enumerate(dynamic_queries)]:
         if q_p not in used:
-            return tipo_p, q_p, "", f"Cinematic documentary shot: {q_p}", False
+            return tipo_p, q_p, "", q_p, False
 
     # Fallback final genérico
     clean_topic = search_topic
     angles = ["historical museum archive artifact", "antique document library parchment", "cinematic panoramic landscape golden hour", "old vintage photograph album memory", "historical monument architecture heritage"]
     mod = angles[(scene_idx - 1) % len(angles)]
     tipo_gen = "video" if (scene_idx % 2 == 1) else "image"
-    q_gen = f"{clean_topic} {mod}"
-    return tipo_gen, q_gen, "", f"Cinematic documentary shot: {q_gen}", False
+    q_gen = scene_text[:250]
+    return tipo_gen, q_gen, "", q_gen, False
 
 
 def _classify_scene(text: str, topic: str = "", canal: str = "", scene_idx: int = 1, used_queries: Optional[set] = None) -> tuple:
@@ -1470,9 +1561,11 @@ def _classify_scene(text: str, topic: str = "", canal: str = "", scene_idx: int 
     """
     low = text.lower()
     used = used_queries if used_queries is not None else set()
-
+  
     # 1. Procura no mapa semântico multitemático por uma query que ainda NÃO foi utilizada
-    matches = [kw for kw in THEMATIC_VISUAL_MAP if kw in low]
+    #matches = [kw for kw in THEMATIC_VISUAL_MAP if kw in low]
+    matches = []
+   
     project_context = f"{topic or ''} {text}".lower()
     model_rail_project = any(term in project_context for term in (
         "ferromodelismo", "ferreomodelismo", "modelismo ferroviário",
@@ -1501,7 +1594,8 @@ def _classify_scene(text: str, topic: str = "", canal: str = "", scene_idx: int 
 
     # Assuntos visuais do tema têm prioridade sobre palavras incidentais da
     # narração (ex.: "pensando" não deve vencer "ferromodelismo").
-    for kw in sorted(matches, key=_specificity):
+    #for kw in sorted(matches, key=_specificity):
+    for kw in []:    
         candidates = THEMATIC_VISUAL_MAP[kw]
         candidates = candidates if isinstance(candidates, list) else [candidates]
         for cand in candidates:
@@ -2288,6 +2382,7 @@ def generate_thumbnail(first_asset: str, out_path: str, title: str,
 
 def save_checkpoint(state: dict, path: Path):
     """Salva o progresso da execução em formato JSON para permitir o uso de --resume."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
@@ -2645,6 +2740,20 @@ def parse_args():
         ),
     )
 
+    # Pipeline control - permite executar apenas partes do pipeline
+    p.add_argument("--script-only", action="store_true", default=False,
+                   help="Apenas gerar/planejar o roteiro (passo 1), sem TTS/mídia/render")
+    p.add_argument("--images-only", action="store_true", default=False,
+                   help="Apenas buscar/gerar mídias (passo 4), precisa de roteiro e áudio existentes")
+    p.add_argument("--render-only", action="store_true", default=False,
+                   help="Apenas renderizar vídeo final (passos 5-6), precisa de mídia/clips existentes")
+
+    # Text injection - permite injetar texto no início/fim do roteiro
+    p.add_argument("--prepend-text", default=None, metavar="TEXTO",
+                   help="Texto a inserir no INÍCIO do roteiro (ex: slogan de abertura)")
+    p.add_argument("--append-text", default=None, metavar="TEXTO",
+                   help="Texto a inserir no FIM do roteiro (ex: call-to-action)")
+
     args = p.parse_args()
     if args.subtitles_only and (not args.roteiro or args.topic):
         p.error("--subtitles-only exige o caminho do roteiro original e não aceita --topic.")
@@ -2660,6 +2769,20 @@ def parse_args():
             p.error(f"Arquivo de vídeo local não encontrado: {args.youtube_authorized_file}")
     elif args.youtube_authorized_file and not args.youtube_rights_confirmed:
         p.error("--youtube-authorized-file exige --youtube-rights-confirmed.")
+
+    # Validação de controle de pipeline
+    pipeline_modes = [args.script_only, args.images_only, args.render_only]
+    if sum(pipeline_modes) > 1:
+        p.error("--script-only, --images-only e --render-only são mutuamente exclusivos.")
+
+    # --images-only e --render-only exigem roteiro existente
+    if (args.images_only or args.render_only) and not args.roteiro:
+        p.error("--images-only e --render-only exigem um arquivo de roteiro (--roteiro / caminho do .txt).")
+    # --render-only precisa de mídia pré-existente
+    if args.render_only and not args.subtitles_only:
+        # Sem --subtitles-only, precisa de áudio/mídia
+        pass  # A validação ocorre em main()
+
     return args
 
 
@@ -2882,6 +3005,32 @@ def main():
         sys.exit(1)
 
     # -------------------------------------------------------------------------
+    # INJEÇÃO DE TEXTO: prepend/append (CLI flags --prepend-text / --append-text)
+    # -------------------------------------------------------------------------
+    if getattr(args, "prepend_text", None):
+        script_text = f"{args.prepend_text} {script_text}"
+        log(f"  [Script] Texto injetado no INÍCIO: \"{args.prepend_text[:80]}...\"")
+    if getattr(args, "append_text", None):
+        script_text = f"{script_text} {args.append_text}"
+        log(f"  [Script] Texto injetado no FIM: \"{args.append_text[:80]}...\"")
+
+    # -------------------------------------------------------------------------
+    # CONTROLE DE PIPELINE: --script-only / --images-only / --render-only
+    # -------------------------------------------------------------------------
+    script_only = getattr(args, "script_only", False)
+    images_only = getattr(args, "images_only", False)
+    render_only = getattr(args, "render_only", False)
+
+    if script_only:
+        print("\n" + "=" * 62)
+        print("  MODO --script-only: Apenas geração/planejamento do roteiro (Passo 1)")
+        print("=" * 62)
+        # Roteiro já foi gerado/carregado acima
+        print(f"\n[OK] Roteiro salvo em: {roteiro_path}")
+        print(f"[OK] {len(script_text.split())} palavras | {len(script_text)} caracteres")
+        return
+
+    # -------------------------------------------------------------------------
     # CARREGAMENTO DE CONFIGURAÇÕES E PERFIS
     # -------------------------------------------------------------------------
     cfg = get_config(
@@ -3054,9 +3203,33 @@ def main():
                 log(f"  [VoiceMemory] Falha ao persistir preferências: {e}", warn=True)
         print(f"[Narração] Arquivo pronto: {audio_path}")
         return
-    # Cria as pastas de produção somente no fluxo completo.
-    for d in [project_dir, videos_dir, imagens_dir, Path(temp_clips), ckpts_dir, thumbs_dir, metadados_dir, saida_dir]:
+
+    # -------------------------------------------------------------------------
+    # CONTROLE DE PIPELINE: --script-only / --images-only / --render-only
+    # -------------------------------------------------------------------------
+    if script_only:
+        print("\n" + "=" * 62)
+        print("  MODO --script-only: Apenas geração/planejamento do roteiro (Passo 1)")
+        print("=" * 62)
+        # Roteiro já foi gerado/carregado acima
+        print(f"\n[OK] Roteiro salvo em: {roteiro_path}")
+        print(f"[OK] {len(script_text.split())} palavras | {len(script_text)} caracteres")
+        # Pula o restante do pipeline
+        return
+
+    # Força criação das pastas necessárias (ainda que em modo reduzido)
+    # Em modo --images-only, ainda precisamos de pastas para os assets
+    # Em modo --render-only, precisamos de pastas de saída
+    for d in [project_dir, imagens_dir, videos_dir, ckpts_dir, thumbs_dir, metadados_dir]:
         d.mkdir(parents=True, exist_ok=True)
+
+    # -------------------------------------------------------------------------
+    # O Resto do Pipeline: adicione skip checks em cada passo abaixo.
+    # Cada passo verificará getattr(args, "images_only", False) ou
+    # getattr(args, "render_only", False) para pular.
+    # -------------------------------------------------------------------------
+    # O passo 1 (planejamento) já foi concluído acima para script_only.
+    # Para os demais modos, continuamos normalmente.
     # srt_path real para o composer (None se legendas desativadas)
     want_subs      = getattr(args, "subtitles", False) and not getattr(args, "no_subtitles", False)
     srt_path       = srt_path_file if want_subs else None
@@ -3173,6 +3346,7 @@ def main():
         log(f"  {len(scenes)} cenas planejadas "
             f"({sum(1 for s in scenes if s['tipo']=='video')} vídeo | "
             f"{sum(1 for s in scenes if s['tipo']=='image')} imagem)")
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
         with open(plan_path, "w", encoding="utf-8") as f:
             json.dump(scenes, f, ensure_ascii=False, indent=2)
         if not args.no_checkpoint:
@@ -3208,24 +3382,21 @@ def main():
     # PASSO 2/10 — Geração de Voz Neural (TTS)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    # Injeta slogan de abertura e frase de encerramento padrão do YouTube
-    # (apenas se não estiverem já presentes no roteiro)
+    # Apenas o slogan de abertura é injetado (botoeira --opening-slogan).
+    # A frase de encerramento do YouTube NÃO é mais injetada automaticamente
+    # para preservar o conteúdo original do roteiro e evitar duplicatas.
     opening = YOUTUBE_OPENING_SLOGAN.strip()
-    closing = YOUTUBE_CLOSING_PHRASE.strip()
-
-    # Verifica se já existem no roteiro (evita duplicação em re-runs)
-    has_opening = opening.lower() in script_text.lower()
-    has_closing = closing.lower() in script_text.lower()
-
-    if not has_opening:
+    if opening and opening.lower() not in script_text.lower():
         script_text = f"{opening} {script_text}"
         log(f"  [Script] Injetado slogan de abertura: \"{opening}\"")
-    if not has_closing:
-        script_text = f"{script_text} {closing}"
-        log(f"  [Script] Injetada frase de encerramento padrão")
 
     print("[2/10] Geração de voz (TTS)...")
-    audio_path = generate_voice(script_text, audio_path, cfg)
+    # Em modo --images-only, pula a geração de voz pois o áudio já existe
+    if not images_only:
+        audio_path = generate_voice(script_text, audio_path, cfg)
+    else:
+        log("[PULA] Passo 2 (TTS pulado em modo --images-only)")
+        print("  [PULA] Passo 2: Geração de voz pulada (áudio já existente)")
     audio_dur  = get_audio_duration_simple(ffmpeg_path, audio_path)
     log(f"  Duração da narração: {audio_dur:.1f}s ({audio_dur/60:.2f} min)")
 

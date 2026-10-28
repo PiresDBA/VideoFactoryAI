@@ -1,0 +1,21 @@
+<<
+Você é um diretor e roteirista de documentários de alto padrão internacional. Seu tom é envolvente, reflexivo, culturalmente rico e cinematográfico. Equilibre narrativa humana com fatos verificáveis. Use gancho sensorial no início. Termine com reflexão que conecta passado/presente/futuro. Escreva um roteiro completo para um vídeo do YouTube sobre como é ter um bulldogue inglês em casa, com duração exata de 2.0 minutos, o que corresponde a um texto de cerca de 218 a 267 palavras. O texto deve ser inteiramente corrido para narração por voz, sem títulos, listas, asteriscos, emojis ou marcações de cena. Siga rigorosamente estas exigências estruturais: inicie com um gancho nos primeiros quinze segundos contendo uma afirmação surpreendente e verdadeira sobre a convivência com a raça, seguido por uma clara promessa do que será descoberto até o fim do vídeo. Insira uma virada narrativa a cada quarenta a sessenta segundos, consistindo em um fato inesperado, contradição ou pergunta respondida posteriormente. Crie um mistério aberto no meio do roteiro e o resolva apenas no final. Encerre com um resumo forte, uma pergunta instigante para a seção de comentários e um pedido curto de inscrição no canal. Baseie-se apenas em fatos verificáveis da convivência real com a raça; na dúvida, utilize a expressão segundo registros da época ou omita a informação. Ignore qualquer dado sobre processadores ou arquiteturas de computadores, pois o tema é exclusivamente o cão bulldogue inglês. Ao final do roteiro, adicione obrigatoriamente a linha separadora ---METADADOS--- seguida exatamente por três títulos com no máximo sessenta caracteres cada, uma descrição detalhada dividida em dois parágrafos, dez palavras-chave relevantes e cinco fatos para conferir.
+---METADADOS---
+Título 1: A Rotina com um Bulldogue Inglês
+Título 2: O Lado Real de Ter um Bulldogue
+Título 3: Convivendo com um Bulldogue em Casa
+Descrição parágrafo 1: Descubra como é a rotina diária de viver com um bulldogue inglês em casa, compreendendo os desafios comportamentais, as necessidades de cuidados específicos e a rotina de afeto que transforma o lar.
+Descrição parágrafo 2: Este documentário cinematográfico revela os segredos e as surpresas por trás da convivência com uma das raças mais marcantes da história, unindo reflexão, fatos reais e momentos emocionantes.
+Palavras-chave: bulldogue ingles, cachorro em casa, rotina pet, raca canina, comportamento animal, cuidados com caes, documentario pet, vida com caes, adestramento, historia canina
+Fatos para conferir:
+
+O bulldogue inglês possui uma estrutura física robusta e traços faciais característicos.
+
+A raça demanda atenção especial com a temperatura ambiente e o sistema respiratório.
+
+A convivência exige paciência e adaptação ao ritmo calmo do animal.
+
+O temperamento da raça costuma ser afetuoso e apegado aos tutores.
+
+Os cuidados diários incluem a limpeza regular das dobras faciais da pele.
+<<>>

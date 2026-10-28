@@ -1,0 +1,31 @@
+--- a/media_research_agent.py	2026-10-27 21:04:14.928829910 +0000
++++ b/media_research_agent.py	2026-10-27 21:04:14.960820043 +0000
+@@ -2423,10 +2423,11 @@
+             "grok": "Grok", "qwen": "Qwen", "meta_muse": "Meta Muse",
+         }
+ 
++        media_perms = getattr(self, "media_source_permissions", None) or {}
+         web_search_enabled = (
+-            web_provider_module is not None 
++            web_provider_module is not None
+             and getattr(self, "webchat_image_search", True)
+-            and getattr(self.media_source_permissions, "webchat", True) if hasattr(self, "media_source_permissions") else True
++            and bool(media_perms.get("webchat", True))
+         )
+ 
+         if web_search_enabled:
+@@ -2599,8 +2600,12 @@
+                 media_cfg.get("webchat_image_search", True)
+                 and media_source_mode != "webchat_only"
+             )
+-            generate_web_image = web_provider_module.generate_image if do_webchat_search else None
+-            search_webchat_fn = web_provider_module.search_webchat_image if do_webchat_search else None
++            generate_web_image = (
++                getattr(web_provider_module, "generate_image", None) if do_webchat_search else None
++            )
++            search_webchat_fn = (
++                getattr(web_provider_module, "search_webchat_image", None) if do_webchat_search else None
++            )
+         except Exception as exc:
+             print(f"    [L4-Web] Integração de fallback indisponível: {exc}")
+             generate_web_image = None

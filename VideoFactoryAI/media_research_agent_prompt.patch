@@ -1,0 +1,42 @@
+--- a/media_research_agent.py
++++ b/media_research_agent.py
+@@ -1198,7 +1198,7 @@
+         self.force_regeneration = bool(media_cfg.get("force_regeneration", False))
+         self.ignore_cache = bool(media_cfg.get("ignore_cache", False))
+         self.web_research_before_generation = bool(
+-            media_cfg.get("web_research_before_generation", True)
++            media_cfg.get("web_research_before_generation", False)
+         )
+         self.gemini_only = str(media_cfg.get("gemini_only", False)).strip().lower() in {
+             "1", "true", "yes", "on",
+@@ -2207,7 +2207,7 @@
+                             scene_id=sid,
+                             topic=getattr(self, "_current_topic", "documentario"),
+                             web_research_before_generation=getattr(
+-                                self, "web_research_before_generation", True
++                                self, "web_research_before_generation", False
+                             ),
+                             scene_text=scene_context,
+                             query=wm_query or query,
+@@ -2718,6 +2718,11 @@
+         Esta query é enviada diretamente para Copilot/ChatGPT/Grok/etc. para
+         buscar fotos reais na web, sem prompts complexos ou instruções de geração.
+         """
++        # Assunto em inglês definido pelo roteiro (campo subject_en) tem prioridade:
++        # é o caminho que evita buscar pelo texto da narração.
++        subject_en = str(scene.get("subject_en", "") or "").strip()
++        if subject_en:
++            return re.sub(r"\s+", " ", re.sub(r"[^\w\s-]", " ", subject_en))[:120]
+         texto = str(scene.get("texto", "") or scene.get("descricao", "") or "").strip()
+         
+         # Extrai palavras-chave visuais
+@@ -2737,8 +2742,7 @@
+         assunto = assunto[:120]
+         
+         # Query simples em inglês para busca web
+-        query = f"photo of {assunto}"
+-        return query
++        return assunto
+ 
+     def _retry_pending_with_clean_queries(self, scenes: List[dict], asset_map: Dict[int, str]) -> None:
+         """

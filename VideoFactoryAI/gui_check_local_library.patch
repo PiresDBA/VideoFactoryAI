@@ -1,0 +1,43 @@
+--- a/videofactory_gui.py	2026-10-27 21:08:57.549398263 +0000
++++ b/videofactory_gui.py	2026-10-27 21:08:57.627549844 +0000
+@@ -668,6 +668,29 @@
+     # ------------------------------------------------------------------
+     # Execução
+     # ------------------------------------------------------------------
++    def _local_library_problem(self) -> str | None:
++        """Impede iniciar quando o modo exige biblioteca local e ela não tem imagens.
++
++        Espelha a regra do media_research_agent (local_only = 'required'): com índice
++        vazio a produção aborta no meio do passo 4. Aqui o erro aparece antes.
++        """
++        if self.subtitle_mode.get() in ("audio_only", "srt_only") or self.script_only.get():
++            return None
++        if self.media_source_mode.get() != "local_only":
++            return None
++        folder = Path(self.local_media_folder.get().strip()).expanduser()
++        if not folder.is_dir():
++            return f"A pasta da biblioteca local não existe:\n{folder}"
++        images = [p for p in folder.glob("*.*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS]
++        if not images:
++            return (
++                "O modo 'Somente biblioteca local' exige imagens na pasta, mas ela está vazia:\n"
++                f"{folder}\n\n"
++                "Escolha a pasta de uma biblioteca com fotos, ou troque a estratégia para "
++                "'Biblioteca local → internet / WebChat'."
++            )
++        return None
++
+     def _start(self) -> None:
+         if self.proc and self.proc.poll() is None:
+             return
+@@ -676,6 +699,10 @@
+         except Exception as exc:
+             messagebox.showerror("Confira as configurações", str(exc))
+             return
++        problem = self._local_library_problem()
++        if problem:
++            messagebox.showerror("Biblioteca local", problem)
++            return
+         summary = " ".join(self._quote(x) for x in cmd)
+         self._append_log(f"\n{'=' * 72}\nIniciando em: {cwd}\nComando: {summary}\n{'=' * 72}\n")
+         self.start_btn.configure(state="disabled")

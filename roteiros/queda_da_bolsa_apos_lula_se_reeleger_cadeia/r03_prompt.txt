@@ -1,0 +1,38 @@
+<<>>
+Você é um diretor e roteirista de documentários de alto padrão internacional (tom envolvente, reflexivo e cinematográfico). Escreva o roteiro de narração para um vídeo do YouTube sobre a reação e queda da bolsa de valores brasileira após a reeleição de Luiz Inácio Lula da Silva. Trate SOMENTE deste evento econômico e político, ignorando qualquer outro sentido da palavra "queda".
+
+DIRETRIZES DO ROTEIRO:
+
+ESTRUTURA:
+
+Inicie (0-15s) com um gancho sensorial e uma afirmação surpreendente e verdadeira, seguida da promessa do que será revelado até o fim.
+
+Abra um mistério no meio da narrativa que só seja resolvido no final.
+
+Insira uma virada narrativa entre os 40 e 60 segundos (fato inesperado ou contradição do mercado).
+
+Encerre conectando passado, presente e futuro em uma reflexão cinematográfica, com um resumo forte, uma pergunta para os comentários e um pedido curto de inscrição.
+
+REGRAS DE REDAÇÃO DA NARRAÇÃO:
+
+Escreva estritamente em TEXTO CORRIDO contínuo para voz over.
+
+PROIBIDO usar títulos, listas, asteriscos, emojis ou marcações de cena (ex: [música], [corte]).
+
+Use apenas fatos verificáveis (quando houver dúvida, use "segundo registros da época" ou omita).
+
+TAMANHO OBRIGATÓRIO DA NARRAÇÃO: Entre 109 e 133 palavras (alvo de 121 palavras). Seja extremamente conciso.
+
+METADADOS:
+Logo após o texto da narração, adicione exatamente a linha:
+---METADADOS---
+Seguida por:
+
+3 opções de títulos (máximo 60 caracteres cada);
+
+Descrição de 2 parágrafos;
+
+10 palavras-chave (separadas por vírgula);
+
+5 fatos históricos/econômicos para conferência.
+<<>>

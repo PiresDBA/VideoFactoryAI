@@ -9,10 +9,10 @@
       "estilo": "nenhum",
       "enter_send": true,
       "max_chars": 20000,
-      "ok": 9,
+      "ok": 31,
       "falhas": 4,
       "seguidas": 0,
-      "lat": 23.9,
+      "lat": 18.1,
       "cooldown": 1792886213.366555
     }
   },
@@ -26,10 +26,10 @@
       "estilo": "colchetes",
       "enter_send": true,
       "max_chars": 20000,
-      "ok": 60,
-      "falhas": 1,
+      "ok": 84,
+      "falhas": 2,
       "seguidas": 0,
-      "lat": 11.9,
+      "lat": 14.9,
       "cooldown": 0
     }
   },
