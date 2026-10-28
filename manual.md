@@ -1,6 +1,6 @@
 # 📘 Manual do Usuário — VideoFactoryAI
 
-> **Versão:** 3.11<br>
+> **Versão:** 3.14<br>
 > **Data:** Outubro 2026
 > **Local do projeto:** C:\Fabrica-de-videos\VideoFactoryAI  
 > **Público-alvo:** Desenvolvedores, operadores de sistema e gestores de projeto  
@@ -303,6 +303,28 @@ A seguir, cada arquivo Python do projeto explicado de forma detalhada:
 ### 5.6.1 `VideoFactoryAI/local_media_agent.py` — Biblioteca Local de Imagens
 
 **O que faz:** Indexa os títulos de imagens JPG, JPEG, PNG e WEBP e usa o modelo de visão Ollama configurado para selecionar a imagem visualmente mais compatível com cada cena.
+
+### 5.6.2 Busca Simplificada WebChat (L4)
+
+A partir da versão 3.14, o nível L4 (IA gerada) mudou seu fluxo de operação:
+
+**Antes:** O sistema enviava prompts complexos para o WebChat, acumulando contexto da cena, queries em português/inglês, palavras-chave, hints visuais, etc. Isso tornava a busca muito restrita e frequentemente gerava apenas o fallback PIL (card de texto). Além disso, tentativas paralelas entre provedores causavam conflitos de browser/context.
+
+**Agora (v3.14):** O fluxo foi invertido e simplificado:
+
+1. **WebChat search primeiro:** É enviada uma query mínima e simples em inglês no formato `"photo of [assunto visual]"` para o WebChat (Copilot, ChatGPT, Grok, etc.). O WebChat pesquisa na web e tenta baixar uma foto real existente.
+
+2. **Geração por IA como fallback:** Apenas se a busca web não encontrar imagens satisfatórias, o sistema tenta a geração por IA (Gemini, CapCut Dreamina, etc.) com o prompt completo.
+
+3. **Provedores sequenciais:** Os provedores são tentados um após o outro (não em paralelo) para evitar conflitos de browser/context compartilhado.
+
+**Query simplificada:**
+- Formato: `"photo of [assunto]"` em inglês
+- Exemplo: `"photo of bulldog sitting on carpet"`
+- Extraído do texto da cena usando `_extract_visual_keywords()` - pegam-se as 3 palavras-chave visuais mais específicas
+- Não acumula contexto da cena, queries em outras línghas, ou hints visuais complexos
+
+**Regra de ouro:** A geração por IA só ocorre se a busca web não encontrar imagens adequadas. Isso evita criar imagens desnecessárias quando fotos reais já existem na web.
 
 **Funcionamento:**
 - Os tokens do texto da cena são comparados aos títulos dos arquivos para formar uma lista curta de candidatas; as imagens e seus títulos são enviados somente ao serviço Ollama local.
@@ -670,6 +692,11 @@ Para criar apenas o áudio, selecione **Gerar somente narração MP3 (sem legend
 | `--media-source-mode MODO` | Escolher uma das quatro estratégias de origem de imagem | `--media-source-mode local_only` |
 | `--local-media-folder PASTA` | Definir a biblioteca local de imagens | `--local-media-folder "C:\Fabrica-de-videos\projetos\makete_ho\imagens"` |
 | `--min-local-images N` | Exigir no mínimo N imagens locais únicas e distribuí-las em cortes dentro das cenas | `--min-local-images 150` |
+| --script-only | Apenas gerar/planejar o roteiro (Passo 1); para após o planejamento | `python agent.py --script-only` |
+| --images-only | Apenas buscar/gerar mídias (Passo 4); precisa de roteiro e áudio já existentes | `python agent.py roteiro.txt --images-only` |
+| --render-only | Apenas renderizar vídeo final (Passos 5-8); precisa de clips processados | `python agent.py --render-only` |
+| --prepend-text TEXTO | Inserir texto no INÍCIO do roteiro (ex: slogan de abertura) | `python agent.py --prepend-text "Slogan inicial"` |
+| --append-text TEXTO | Inserir texto no FIM do roteiro (ex: call-to-action) | `python agent.py --append-text "Inscreva-se no canal"` |
 
 ### 7.8 Exemplo completo
 
@@ -776,6 +803,9 @@ Se não quiser usar a voz clonada, o padrão é Edge-TTS (voz neural da Microsof
 | **Roteiro fiel ao tema** | Não inventa fatos que não estejam nas fontes pesquisadas |
 | **WebChat é exclusivo** | Se usar modo webchat, não cai automaticamente para outro modo |
 | **Legendas opcionais** | Padrão é sem legendas. Use `--subtitles` se quiser |
+| **Pipeline por etapas** | `--script-only`, `--images-only` e `--render-only` são mutuamente exclusivos; `--images-only` e `--render-only` exigem roteiro/áudio/clips pré-existentes |
+| **Busca simplificada** | A busca WebChat usa query mínima `"photo of [assunto]"` em inglês; geração por IA só ocorre se a busca falhar |
+| **Injeção de texto** | `--prepend-text` e `--append-text` inserem texto no início/fim do roteiro antes da geração de narração |
 
 ---
 
@@ -921,6 +951,10 @@ Após **QUALQUER** mudança (código, config, dependência, pipeline, fontes, va
 | 3.2 | 26/10/2026 | Configurada a pasta `imagens` e o modo somente local, com bloqueio de fallback online e busca da próxima imagem exclusiva | `VideoFactoryAI/agent.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/local_media_agent.py`, `VideoFactoryAI/config.yaml`, `VideoFactoryAI/tests/test_local_media_agent.py`, `manual.md` | Copilot |
 | 3.3 | 26/10/2026 | Substituída busca CLIP por shortlist de títulos em português e seleção visual Ollama local; imagens locais não acionam validação Gemini | `VideoFactoryAI/local_media_agent.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/config.yaml`, `VideoFactoryAI/tests/test_local_media_agent.py`, `requirements.txt`, `manual.md` | Copilot |
 | 3.4 | 26/10/2026 | Adicionada revisão visual interativa para candidatos locais abaixo do limiar, rejeição válida apenas por cena e redução de imagens em memória | `.gitignore`, `VideoFactoryAI/agent.py`, `VideoFactoryAI/videofactory_gui.py`, `VideoFactoryAI/local_media_agent.py`, `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/tests/test_local_media_agent.py`, `VideoFactoryAI/tests/test_local_media_review.py`, `manual.md` | Copilot |
+| 3.5 | 27/10/2026 | Corrigido bug de sintaxe em FREE_IMAGE_SOURCES (chave `freepik` faltando fechamento); adicionada função `_extract_visual_keywords` em media_research_agent.py para retry de queries simplificadas; testes de integração local (múltiplas imagens, skip_ollama, GUI callback) validados com sucesso | `VideoFactoryAI/media_research_agent.py`, `VideoFactoryAI/tests/test_complete_flow.py`, `VideoFactoryAI/tests/test_e2e_flow.py`, `VideoFactoryAI/tests/test_complete_multi_image.py`, `manual.md` | MiMo |
+
+| 3.13 | 27/10/2026 | Adicionada integração WebChat para busca de imagens na web (L4); fontes livres (Pixabay/Pexels/Openverse) desabilitadas por padrão; novas opções de configuração webchat_image_search, desabilitar_pixabay, desabilitar_pexels, desabilitar_openverse, youtube_mode; prompts simplificados em inglês; teste de integração validado | VideoFactoryAI/media_research_agent.py, VideoFactoryAI/config.yaml, VideoFactoryAI/web_image_providers.py, manual.md | MiMo |
+| 3.14 | 27/10/2026 | Refatorado pipeline de mídia para usar WebChat como fonte primária; busca simplificada em inglês "photo of [query]" como padrão; geração por IA apenas como fallback; adição de flags CLI --script-only, --images-only, --render-only e --prepend-text / --append-text para controle por etapas; L4 agora tenta busca web antes de geração Gemini; provedores tentados sequencialmente para evitar conflitos de browser | VideoFactoryAI/media_research_agent.py, VideoFactoryAI/web_image_providers.py, VideoFactoryAI/agent.py, VideoFactoryAI/videofactory_gui.py, manual.md | MiMo |
 
 > **Lembrete:** se a linha acima estiver vazia, o manual NÃO foi atualizado e você deve corrigir antes de commitar qualquer alteração.
 
