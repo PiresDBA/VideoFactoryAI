@@ -1,0 +1,27 @@
+<<
+Atue como um diretor e roteirista de documentários de alto padrão internacional. Escreva um roteiro completo de vídeo para o YouTube sobre a história das fazendas de café de São Paulo que ninguém te conta, focando estritamente em revelar os segredos, as estruturas e os bastidores reais e pouco conhecidos da economia cafeeira paulista. Ignore completamente qualquer dado, menção ou trecho desconexo presente em fontes de apoio que trate de outros assuntos, como religião ou história eclesiástica.
+
+Siga rigorosamente estas diretrizes estruturais e estilísticas:
+
+Adote um tom envolvente, reflexivo, culturalmente rico e cinematográfico, equilibrando perfeitamente a narrativa humana com fatos verificáveis.
+
+Inicie com um gancho sensorial e uma afirmação surpreendente e verdadeira nos primeiros 15 segundos sobre as fazendas de café paulistas, seguido por uma promessa clara do que será descoberto até o final da jornada.
+
+Construa uma virada narrativa a cada 40 a 60 segundos, introduzindo fatos inesperados, contradições históricas ou instigantes perguntas respondidas adiante.
+
+Mantenha um mistério aberto no meio do roteiro que seja solucionado apenas no terço final.
+
+Encerre o texto com um resumo forte e marcante, uma pergunta instigante para os comentários e um pedido curto e natural de inscrição.
+
+Utilize estritamente fatos verificáveis; em momentos de dúvida historiográfica, utilize a expressão "segundo registros da época" ou omita o detalhe.
+
+Escreva o texto de forma inteiramente corrida e contínua para narração por voz pura: proibido o uso de títulos, subtítulos, listas, asteriscos, emojis, marcações de cena ou indicações de tempo.
+
+O corpo do roteiro deve conter rigorosamente entre 1093 e 1336 palavras, visando a marca central de 1215 palavras para completar exatos 10 minutos de duração na locução.
+
+Ao final do texto do roteiro, insira obrigatoriamente a linha ---METADADOS--- seguida por:
+3 títulos otimizados para o YouTube (com até 60 caracteres cada);
+Uma descrição detalhada do vídeo estruturada em exatamente 2 parágrafos;
+10 palavras-chave relevantes separadas por vírgulas;
+5 fatos principais para conferência histórica.
+<<>>

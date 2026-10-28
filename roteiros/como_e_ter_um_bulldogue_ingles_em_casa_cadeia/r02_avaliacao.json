@@ -1,0 +1,11 @@
+{
+  "rodada": 2,
+  "criador": "gemini",
+  "redator": "chatgpt",
+  "palavras": 456,
+  "problemas_objetivos": [
+    "muito longo: 456 palavras (alvo máximo 279)"
+  ],
+  "nota": 0,
+  "criticas": []
+}

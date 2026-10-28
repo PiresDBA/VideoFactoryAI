@@ -29,7 +29,7 @@ try:
 except ImportError:
     MOVIEPY_AVAILABLE = False
 
-EFFECT_TYPES = ["pan", "slide", "static"]
+EFFECT_TYPES = ["pan", "zoom", "static"]
 DEFAULT_EFFECT = "pan"
 
 
@@ -121,34 +121,25 @@ def process_single_scene(
     )
     
     if is_image:
-        if effect == "slide":
-            # A proper overlay graph: black canvas + animated image. The prior
-            # implementation placed `x=`/`y=` as if they were filters, which
-            # FFmpeg rejects (e.g. "[slide]x=...").
+        if effect in ("zoom", "slide"):
+            # Zoom suave (Ken Burns) sobre a própria foto. Substitui o "slide", que deixava
+            # a tela preta aparecer enquanto a imagem entrava. "slide" continua aceito
+            # para configs antigas, mas agora gera zoom.
             frames = max(2, int(round(float(duration) * 30)))
-            directions = ["left", "right", "up", "down"]
-            direction = directions[scene_idx % len(directions)]
-            if direction == "left":
-                x_expr, y_expr = f"-overlay_w+overlay_w*n/{frames - 1}", "0"
-            elif direction == "right":
-                x_expr, y_expr = f"main_w-main_w*n/{frames - 1}", "0"
-            elif direction == "up":
-                x_expr, y_expr = "0", f"-overlay_h+overlay_h*n/{frames - 1}"
-            else:  # down
-                x_expr, y_expr = "0", f"main_h-main_h*n/{frames - 1}"
-
-            filter_complex = (
-                "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,"
-                "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[img];"
-                f"[1:v][img]overlay=x={x_expr}:y={y_expr}:shortest=1,"
-                "fps=30,format=yuv420p[out]"
+            zoom_in = (scene_idx % 2 == 0)
+            if zoom_in:
+                z_expr = f"min(1+0.12*on/{frames},1.12)"
+            else:
+                z_expr = f"max(1.12-0.12*on/{frames},1)"
+            vf_zoom = (
+                "scale=3840:-2,"
+                f"zoompan=z='{z_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+                "d=1:s=1920x1080:fps=30,setsar=1,format=yuv420p"
             )
             cmd = [
                 ffmpeg_path, "-y",
-                "-loop", "1", "-i", source_asset,
-                "-f", "lavfi", "-i", f"color=c=black:s=1920x1080:r=30:d={duration}",
-                "-filter_complex", filter_complex,
-                "-map", "[out]",
+                "-loop", "1", "-framerate", "30", "-i", source_asset,
+                "-vf", vf_zoom,
                 "-t", str(duration),
                 "-c:v", "libx264", "-preset", "medium", "-crf", "18",
                 "-pix_fmt", "yuv420p", "-an", output_clip_path
@@ -447,6 +438,43 @@ def _process_multi_image_scene(
             pass
 
 
+def _process_multi_image_parts(
+    scene: Dict[str, Any],
+    image_paths: List[str],
+    temp_clips_dir: str,
+    ffmpeg_path: str,
+    cfg: Dict,
+    scene_idx: int = 0,
+) -> List[str]:
+    """Cada foto da cena vira um plano separado, de duração igual a duração_da_cena / fotos.
+
+    Não concatena: o composer aplica a transição entre cada foto. Os nomes seguem
+    clip_NN_image_KKK.mp4 e são reaproveitados se já existirem.
+    """
+    scene_id = scene["id"]
+    duration = float(scene["duration"])
+    valid = [p for p in image_paths if os.path.exists(p)]
+    if not valid:
+        return []
+    max_images = max(1, int(duration // 1.0))
+    if len(valid) > max_images:
+        print(f"    [MULTI-IMAGE] Scene {scene_id:02d}: usando {max_images} de {len(valid)} fotos (duração)")
+        valid = valid[:max_images]
+    per_image = duration / len(valid)
+    print(f"    [MULTI-IMAGE] Scene {scene_id:02d}: {len(valid)} planos de {per_image:.2f}s")
+    shots: List[str] = []
+    for i, image_path in enumerate(valid, 1):
+        shot_path = os.path.join(temp_clips_dir, f"clip_{scene_id:02d}_image_{i:03d}.mp4")
+        part = dict(scene)
+        part["duration"] = per_image
+        part["tipo"] = "image"
+        if process_single_scene(part, image_path, shot_path, ffmpeg_path, cfg, scene_idx * 10 + i):
+            shots.append(shot_path)
+        else:
+            print(f"    [MULTI-IMAGE] Falha no plano {i} da cena {scene_id:02d}")
+    return shots
+
+
 def process_all_scenes(
     scenes: List[Dict[str, Any]],
     asset_map: Dict[int, str],
@@ -476,27 +504,24 @@ def process_all_scenes(
     total = len(scenes)
     for idx, s in enumerate(scenes, 1):
         scene_id = s["id"]
-        out_path = os.path.join(temp_clips_dir, f"clip_{scene_id:02d}.mp4")
-        if os.path.exists(out_path) and os.path.getsize(out_path) > 50000:
-            print(f"  [{idx:02d}/{total:02d}] Scene {scene_id:02d} cached ({s['duration']:.2f}s). Skipping...")
-            processed_clips.append(out_path)
-            continue
-
-        # Check if scene has multiple images
+        # Cena com várias fotos: cada foto é um plano; o composer faz a transição entre eles.
         image_sequence = asset_sequences.get(scene_id, [])
         if len(image_sequence) > 1:
             print(
                 f"  [{idx:02d}/{total:02d}] Processing Scene {scene_id:02d} "
                 f"(MULTI-IMAGE, {len(image_sequence)} photos, {s['duration']:.2f}s)..."
             )
-            success = _process_multi_image_scene(
-                s, image_sequence, out_path, ffmpeg_path, cfg, scene_idx=idx
-            )
-            if success:
-                processed_clips.append(out_path)
+            shots = _process_multi_image_parts(s, image_sequence, temp_clips_dir, ffmpeg_path, cfg, scene_idx=idx)
+            if shots:
+                processed_clips.extend(shots)
                 continue
-            else:
-                print(f"    [WARN] Multi-image processing failed for Scene {scene_id:02d}, falling back to single image")
+            print(f"    [WARN] Multi-image falhou na cena {scene_id:02d}; usando a imagem única")
+
+        out_path = os.path.join(temp_clips_dir, f"clip_{scene_id:02d}.mp4")
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 50000:
+            print(f"  [{idx:02d}/{total:02d}] Scene {scene_id:02d} cached ({s['duration']:.2f}s). Skipping...")
+            processed_clips.append(out_path)
+            continue
         
         # Single image processing (original logic)
         source_asset = asset_map.get(scene_id)

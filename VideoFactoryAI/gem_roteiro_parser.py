@@ -137,7 +137,12 @@ def _extrair_cenas(texto: str) -> List[CenaGem]:
         
         # Extrai [VISUAL]
         visual = ""
-        m_visual = re.search(r'\[VISUAL\]\s*:?\s*(.+?)(?=\[|$)', texto_cena, re.DOTALL | re.I)
+        # O visual termina na próxima tag, numa linha em branco ou no cabeçalho da PARTE 2;
+        # antes, sem colchete depois, ele engolia a narração inteira.
+        m_visual = re.search(
+            r'\[VISUAL\]\s*:?\s*(.+?)(?=\n\s*\[|\n\s*\n|\n\s*PARTE\b|\Z)',
+            texto_cena, re.DOTALL | re.I,
+        )
         if m_visual:
             visual = m_visual.group(1).strip()
         
@@ -279,7 +284,7 @@ def gem_para_cenas_pipeline(roteiro_gem: RoteiroGem, topic: str) -> List[Dict]:
     palavras = narracao.split()
     total_palavras = len(palavras)
     
-    if not cenas_pipeline and roteiro_gem.cenas:
+    if roteiro_gem.cenas:
         # Calcula proporção de palavras por cena baseado na duração
         duracao_total = roteiro_gem.duracao_total_seg
         if duracao_total == 0:

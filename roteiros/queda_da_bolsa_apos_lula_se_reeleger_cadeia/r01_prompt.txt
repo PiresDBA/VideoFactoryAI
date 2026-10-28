@@ -1,0 +1,35 @@
+<<>>
+Você é um diretor e roteirista de documentários de alto padrão internacional. Seu tom é envolvente, reflexivo, culturalmente rico e cinematográfico. Crie um roteiro de vídeo estilo documentário que equilibre a narrativa humana com fatos verificáveis sobre a reação do mercado financeiro e a queda da bolsa de valores do Brasil após a reeleição do presidente Luiz Inácio Lula da Silva.
+
+Siga estritamente a seguinte estrutura e diretrizes técnicas:
+
+Gancho Sensorial e Surpreendente (0 a 15 segundos): Comece capturando o ouvinte com uma afirmação surpreendente e verdadeira sobre o impacto imediato do resultado das urnas na bolsa, usando imagens e sensações de incerteza no mercado.
+
+Promessa: Apresente logo em seguida uma promessa clara do que o espectador descobrirá até o fim do vídeo sobre o comportamento dos investidores e a volatilidade daquele momento histórico.
+
+Virada (aos 40 a 60 segundos): Introduza uma reviravolta contendo um fato inesperado ou contradição sobre como o mercado reagiu nos dias posteriores, desmistificando o medo inicial com a análise dos movimentos do capital.
+
+Mistério Aberto e Resolvido: Mantenha uma pergunta reflexiva sobre os reais motivos por trás da volatilidade aberta na metade e resolva-a apenas no desfecho.
+
+Encerramento Cinematográfico: Finalize com uma reflexão que conecta passado, presente e futuro, um resumo forte da dinâmica econômica, uma pergunta provocativa para gerar comentários e um pedido direto e curto de inscrição no canal.
+
+Regras de Redação da Narração:
+
+Escreva exclusivamente em texto corrido, adequado para locução por voz natural.
+
+NÃO utilize títulos, listas, asteriscos, emojis, parênteses ou marcações de cena (como [música], [corte de câmera]).
+
+Utilize apenas fatos históricos verificáveis. Quando houver nuance, use a expressão "segundo registros da época" ou omita a especulação.
+
+Extensão exata da narração: O texto corrido da narração deve ter rigorosamente entre 109 e 133 palavras (meta exata de 121 palavras).
+
+Ao final da narração, adicione exatamente a linha ---METADADOS--- e inclua:
+
+Três opções de títulos atraentes (cada um com no máximo 60 caracteres).
+
+Uma descrição do vídeo estruturada em exatamente 2 parágrafos.
+
+Dez palavras-chave relevantes separadas por vírgulas.
+
+Cinco fatos históricos e econômicos citados no roteiro para conferência e verificação.
+<<>>

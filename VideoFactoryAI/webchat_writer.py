@@ -40,6 +40,21 @@ UI_LIXO = re.compile(
 )
 
 
+# Rótulos que a interface dos WebChats cola junto com a resposta.
+# "Você disse:" marca o prompt enviado (eco); "ChatGPT disse:" marca a resposta do assistente.
+UI_ROTULO_USUARIO = re.compile(r"^\s*(voc[êe]\s+disse|you\s+said)\s*:", re.I)
+UI_ROTULO_ASSISTENTE = re.compile(
+    r"^\s*(chatgpt|gemini|copilot|grok|qwen|meta\s*ai|claude|assistant)\s+(disse|said)\s*:?\s*(.*)$",
+    re.I,
+)
+UI_LIXO_EXTRA = re.compile(
+    r"^\s*(\.{1,3}|…|mostrar\s+mais|show\s+more|escrita|writing|pensando|thinking|"
+    r"regenerar|copiar|copy|curtir|descurtir|compartilhar|share|fontes|sources|"
+    r"mais\s+opções|more\s+options)\s*$",
+    re.I,
+)
+
+
 class WebChatError(RuntimeError):
     pass
 
@@ -124,13 +139,55 @@ def _carregar_ask_web():
 
 
 def _limpar_ui(texto: str) -> str:
-    linhas = [l for l in texto.splitlines() if not UI_LIXO.match(l)]
+    """Devolve só a última resposta do assistente, sem eco do prompt nem rótulos de interface.
+
+    A página do WebChat traz o histórico: blocos "Você disse:" (o prompt enviado) e blocos
+    "<modelo> disse:" (a resposta). Sem separar os blocos, o prompt e os rótulos entravam
+    no roteiro e na rodada seguinte.
+    """
+    segmentos: list[tuple[str | None, list[str]]] = []
+    papel: str | None = None
+    atual: list[str] = []
+    for linha in str(texto or "").splitlines():
+        if UI_ROTULO_USUARIO.match(linha):
+            segmentos.append((papel, atual))
+            papel, atual = "user", []
+            continue
+        marca = UI_ROTULO_ASSISTENTE.match(linha)
+        if marca:
+            segmentos.append((papel, atual))
+            papel, atual = "assistant", []
+            if marca.group(3).strip():
+                atual.append(marca.group(3).strip())
+            continue
+        atual.append(linha)
+    segmentos.append((papel, atual))
+
+    respostas = [linhas for p, linhas in segmentos if p == "assistant"]
+    if respostas:
+        linhas = respostas[-1]
+    else:
+        linhas = [l for p, ls in segmentos if p is None for l in ls]
+    linhas = [l for l in linhas if not (UI_LIXO.match(l) or UI_LIXO_EXTRA.match(l))]
     return "\n".join(linhas).strip()
+
+
+def _tem_sujeira_de_interface(texto: str) -> str | None:
+    """Primeira linha com resquício de interface (rótulo, eco ou botão), se houver."""
+    for linha in texto.splitlines():
+        if (UI_ROTULO_USUARIO.match(linha) or UI_ROTULO_ASSISTENTE.match(linha)
+                or UI_LIXO.match(linha) or UI_LIXO_EXTRA.match(linha)):
+            return linha.strip()[:60]
+    return None
 
 
 def _validar_roteiro(texto: str, target_words: int, topic: str,
                      min_words: int = 0) -> tuple[bool, str]:
     """Valida qualidade básica do roteiro gerado."""
+    sujeira = _tem_sujeira_de_interface(texto)
+    if sujeira:
+        return False, f"Sujeira de interface no texto: '{sujeira}'"
+
     words = texto.split()
     wc = len(words)
     lo = min_words if min_words > 0 else int(target_words * 0.85)

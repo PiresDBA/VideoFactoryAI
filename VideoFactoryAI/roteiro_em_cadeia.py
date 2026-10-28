@@ -45,11 +45,8 @@ def _sites(nome_env: str, padrao: str) -> List[str]:
 
 def _default_ask() -> Callable[[str, str], str]:
     from webchat_bridge import ask_web  # type: ignore
-    try:
-        from webchat_writer import _limpar_ui  # type: ignore
-    except Exception:
-        def _limpar_ui(t):
-            return t
+    # Sem fallback: antes, se este import falhasse, a resposta suja passava sem limpeza.
+    from webchat_writer import _limpar_ui  # type: ignore
 
     def ask(prompt: str, site: str) -> str:
         resultado = ask_web(prompt, order=[site], interactive=True, fallback_local=False, validar=None)
@@ -74,11 +71,15 @@ def _pedir(ask, prompt: str, sites: List[str], log) -> Tuple[str, str]:
 
 
 def limpar_roteiro(texto: str) -> str:
-    """Remove o bloco de metadados, marcação de markdown e espaços excedentes."""
+    """Remove metadados, rótulos de interface, eco do prompt, markdown e espaços excedentes."""
+    from webchat_writer import _limpar_ui  # type: ignore
+
     t = texto.replace("\r\n", "\n")
     m = re.search(r"^\s*-{3,}\s*METADADOS\s*-{3,}\s*$", t, flags=re.M | re.I)
     if m:
         t = t[:m.start()]
+    # Primeiro a limpeza por turno: só a última resposta do assistente, sem "Você disse:" e botões.
+    t = _limpar_ui(t)
     t = re.sub(r"[*#`]+", "", t)
     t = re.sub(r"^\s*(roteiro|script|narração|narracao)\s*:?\s*$", "", t, flags=re.M | re.I)
     t = re.sub(r"^\s*you\s+said:.*$", "", t, flags=re.M | re.I)
@@ -97,7 +98,12 @@ def limpar_roteiro(texto: str) -> str:
 
 def checar(texto: str, alvo: int) -> List[str]:
     """Checagens objetivas. Devolve a lista de problemas (vazia = passou)."""
+    from webchat_writer import _tem_sujeira_de_interface  # type: ignore
+
     problemas = []
+    sujeira = _tem_sujeira_de_interface(texto)
+    if sujeira:
+        problemas.append(f"sujeira de interface no texto: '{sujeira}'. Entregue só o roteiro.")
     n = len(texto.split())
     if n < alvo * 0.9:
         problemas.append(f"muito curto: {n} palavras (alvo mínimo {int(alvo * 0.9)})")

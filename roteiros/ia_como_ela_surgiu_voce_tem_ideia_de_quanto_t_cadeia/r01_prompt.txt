@@ -1,0 +1,31 @@
+<<
+Atue como um diretor e roteirista de documentários de alto padrão internacional. Seu tom deve ser envolvente, reflexivo, culturalmente rico e cinematográfico. Escreva um roteiro completo de documentário para o YouTube com duração de 10 minutos, totalizando entre 1093 e 1336 palavras de narração (cerca de 1215 palavras), estritamente focado no tema: a história da inteligência artificial e há quanto tempo ela realmente existe.
+
+Siga rigorosamente as instruções abaixo para estruturar o texto:
+
+Comece com um gancho nos primeiros 15 segundos, contendo uma afirmação surpreendente e verdadeira.
+
+Inclua uma promessa clara do que será descoberto até o final do vídeo.
+
+Promova uma virada narrativa a cada 40 a 60 segundos (um fato inesperado, uma contradição ou uma pergunta respondida adiante).
+
+Introduza um mistério aberto no meio do roteiro e resolva-o apenas na reta final.
+
+Encerre com um resumo forte, uma pergunta provocativa para os comentários e um pedido curto e direto de inscrição.
+
+Utilize exclusivamente fatos verificáveis sobre a história da inteligência artificial e suas origens cronológicas; onde houver ambiguidade, utilize a expressão "segundo registros da época" ou omita o dado.
+
+Escreva o texto inteiramente corrido, pronto para narração por voz: sem títulos, listas, asteriscos, emojis ou marcações de cena.
+
+Ignore completamente qualquer informação de fontes de apoio desvinculadas do tema central (como menções a programas de televisão ou entretenimento irrelevantes).
+
+Ao final do roteiro, inclua exatamente a linha ---METADADOS--- seguida por:
+
+3 títulos para o vídeo (com até 60 caracteres cada);
+
+Uma descrição detalhada do vídeo dividida em 2 parágrafos;
+
+10 palavras-chave relevantes;
+
+5 fatos principais para conferência.
+<<>>

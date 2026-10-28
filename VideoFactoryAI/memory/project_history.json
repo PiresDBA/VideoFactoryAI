@@ -287,5 +287,130 @@
     "tempo_pipeline_s": 1478.9,
     "tempo_pipeline_min": 24.65,
     "output_video": "C:\\Fabrica-de-videos\\projetos\\makete_ho\\makete_ho.mp4"
+  },
+  {
+    "data": "2026-10-27T03:53:13.989679",
+    "tema": "bulldogue_ingles",
+    "canal": "documentario",
+    "duracao_s": 121.8,
+    "duracao_min": 2.03,
+    "num_cenas": 6,
+    "tipos_cenas": {
+      "image": 6
+    },
+    "assets_total": 0,
+    "midia_real": 0,
+    "midia_ia_gerada": 0,
+    "fontes": {
+      "L1_video": 0,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 0,
+      "local_library": 0,
+      "cache": 0
+    },
+    "tempo_pipeline_s": 475.1,
+    "tempo_pipeline_min": 7.92,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\bulldogue_ingles\\bulldogue_ingles.mp4"
+  },
+  {
+    "data": "2026-10-27T04:20:05.645077",
+    "tema": "salsicha",
+    "canal": "documentario",
+    "duracao_s": 165.8,
+    "duracao_min": 2.76,
+    "num_cenas": 8,
+    "tipos_cenas": {
+      "image": 8
+    },
+    "assets_total": 5,
+    "midia_real": 0,
+    "midia_ia_gerada": 5,
+    "fontes": {
+      "L1_video": 0,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 5,
+      "local_library": 0,
+      "cache": 0
+    },
+    "tempo_pipeline_s": 447.3,
+    "tempo_pipeline_min": 7.45,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\salsicha\\salsicha.mp4"
+  },
+  {
+    "data": "2026-10-27T13:18:57.896212",
+    "tema": "salsicha",
+    "canal": "documentario",
+    "duracao_s": 165.8,
+    "duracao_min": 2.76,
+    "num_cenas": 8,
+    "tipos_cenas": {
+      "image": 8
+    },
+    "assets_total": 7,
+    "midia_real": 0,
+    "midia_ia_gerada": 1,
+    "fontes": {
+      "L1_video": 0,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 1,
+      "local_library": 0,
+      "cache": 6
+    },
+    "tempo_pipeline_s": 1202.8,
+    "tempo_pipeline_min": 20.05,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\salsicha\\salsicha.mp4"
+  },
+  {
+    "data": "2026-10-27T16:36:04.362616",
+    "tema": "como_e_ter_um_bulldogue_ingles_como_seu_compa",
+    "canal": "historia",
+    "duracao_s": 141.7,
+    "duracao_min": 2.36,
+    "num_cenas": 8,
+    "tipos_cenas": {
+      "image": 8
+    },
+    "assets_total": 2,
+    "midia_real": 0,
+    "midia_ia_gerada": 2,
+    "fontes": {
+      "L1_video": 0,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 2,
+      "local_library": 0,
+      "cache": 0
+    },
+    "tempo_pipeline_s": 225.4,
+    "tempo_pipeline_min": 3.76,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\como_e_ter_um_bulldogue_ingles_como_seu_compa\\como_e_ter_um_bulldogue_ingles_como_seu_compa.mp4"
+  },
+  {
+    "data": "2026-10-27T16:49:48.734271",
+    "tema": "como_e_ter_um_bulldogue_ingles_como_seu_compa",
+    "canal": "historia",
+    "duracao_s": 141.7,
+    "duracao_min": 2.36,
+    "num_cenas": 8,
+    "tipos_cenas": {
+      "image": 8
+    },
+    "assets_total": 2,
+    "midia_real": 0,
+    "midia_ia_gerada": 2,
+    "fontes": {
+      "L1_video": 0,
+      "L2_image": 0,
+      "L3_ai_public": 0,
+      "L4_ia_generated": 2,
+      "local_library": 0,
+      "cache": 0
+    },
+    "tempo_pipeline_s": 269.5,
+    "tempo_pipeline_min": 4.49,
+    "output_video": "C:\\Fabrica-de-videos\\projetos\\como_e_ter_um_bulldogue_ingles_como_seu_compa\\como_e_ter_um_bulldogue_ingles_como_seu_compa.mp4"
   }
 ]
