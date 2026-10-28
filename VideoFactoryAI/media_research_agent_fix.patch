@@ -1,0 +1,329 @@
+--- a/media_research_agent.py
++++ b/media_research_agent.py
+@@ -2388,26 +2388,17 @@
+                         f"{os.path.basename(selected_file)}"
+                     )
+ 
+-                    return dest_path
+-
+-                    continue
++                    i_hash = _file_hash(dest_path)
+                     if i_hash and i_hash in self.used_hashes:
+                         print(f"    [Dedup] {name}: duplicata da Cena {self.used_hashes[i_hash]:02d}. Rejeitando...")
+-                        self.used_urls.add(url)
+                         try: os.remove(dest_path)
+                         except Exception: pass
+                         continue
+-                    # Validação de compatibilidade imagem↔roteiro
+-                    if not self._validate_asset(scene, dest_path, name):
+-                        self.used_urls.add(url)
+-                        continue
+-                    print(f"    [L2-Image] {name} OK — licenca: {lic}")
+-                    print(f"    [WebSearch] Escolhido: {url} | Licença: {lic}")
+-                    self.used_urls.add(url)
+                     if i_hash: self.used_hashes[i_hash] = sid
++                    self.used_urls.add(selected_file)
+                     self.used_paths[dest_path] = sid
+                     self._record_hit(name)
+-                    self._add_report(sid, 2, name, url, lic, dest_path, "image")
++                    self._add_report(sid, 2, name, selected_file, lic, dest_path, "image")
+                     return dest_path
+                 time.sleep(0.2)
+ 
+@@ -2786,151 +2777,151 @@
+         return query
+ 
+     def _build_simple_search_query(self, scene: dict) -> str:
+-    """
+-    Extrai uma query visual específica para Bing.
+-    Prioridade:
+-    1) Eventos históricos
+-    2) Sistemas/Invenções
+-    3) Pessoas
+-    4) Conceitos
+-    5) Fallback
+-    """
+-
+-    import re
+-
+-    texto = str(
+-        scene.get("texto", "")
+-        or scene.get("descricao", "")
+-        or ""
+-    ).strip()
+-
+-    if not texto:
+-        return "historical documentary"
+-
+-    texto_lower = texto.lower()
+-
+-    # --------------------------------------------------
+-    # EVENTOS / SISTEMAS IMPORTANTES
+-    # --------------------------------------------------
+-
+-    eventos = {
+-        "logic theorist": "Logic Theorist AI program",
+-        "deep blue": "Deep Blue chess computer",
+-        "alexnet": "AlexNet neural network",
+-        "dartmouth": "Dartmouth Conference 1956",
+-        "enigma": "Enigma machine",
+-        "segunda guerra mundial": "World War II codebreaking",
+-        "criptoanálise": "Bletchley Park codebreaking",
+-    }
+-
+-    for chave, query in eventos.items():
+-
+-        if chave in texto_lower:
+-
+-            print(
+-                f"[QUERY DEBUG] Evento detectado => {query}",
+-                flush=True
+-            )
+-
+-            return query
+-
+-    # --------------------------------------------------
+-    # PESSOAS
+-    # --------------------------------------------------
+-
+-    nomes = re.findall(
+-        r'\b[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+'
+-        r'(?:\s+[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+){1,3}',
+-        texto
+-    )
+-
+-    blacklist = {
+-        "Inteligência Artificial",
+-        "Segunda Guerra Mundial",
+-        "Primeira Guerra Mundial",
+-    }
+-
+-    for nome in nomes:
+-
+-        if nome not in blacklist:
+-
+-            query = f"{nome} portrait"
+-
+-            print(
+-                f"[QUERY DEBUG] Pessoa => {query}",
+-                flush=True
+-            )
+-
+-            return query
+-
+-    # --------------------------------------------------
+-    # CONCEITOS IMPORTANTES
+-    # --------------------------------------------------
+-
+-    conceitos = {
+-        "redes neurais": "early neural network diagram",
+-        "rede neural": "early neural network diagram",
+-        "neurônio artificial": "artificial neuron diagram",
+-        "memória": "early computer memory",
+-        "processamento": "mainframe computer room",
+-        "computador eletrônico": "early computer laboratory",
+-        "autômatos": "ancient automaton machine",
+-        "autômato": "ancient automaton machine",
+-    }
+-
+-    for chave, query in conceitos.items():
+-
+-        if chave in texto_lower:
+-
+-            print(
+-                f"[QUERY DEBUG] Conceito => {query}",
+-                flush=True
+-            )
+-
+-            return query
+-
+-    # --------------------------------------------------
+-    # FALLBACK
+-    # --------------------------------------------------
+-
+-    palavras = re.findall(
+-        r'\b[a-zA-ZÀ-ÿ]{5,}\b',
+-        texto
+-    )
+-
+-    stopwords = {
+-        "durante",
+-        "através",
+-        "entretanto",
+-        "também",
+-        "porque",
+-        "quando",
+-        "essas",
+-        "esses",
+-        "aquela",
+-        "aquele",
+-        "inteligência",
+-        "artificial",
+-        "computadores",
+-    }
+-
+-    palavras = [
+-        p
+-        for p in palavras
+-        if p.lower() not in stopwords
+-    ]
+-
+-    query = " ".join(palavras[:4])
+-
+-    if not query:
+-        query = "historical technology"
+-
+-    print(
+-        f"[QUERY DEBUG] Fallback => {query}",
+-        flush=True
+-    )
+-
+-    return query[:120]
++        """
++        Extrai uma query visual específica para Bing.
++        Prioridade:
++        1) Eventos históricos
++        2) Sistemas/Invenções
++        3) Pessoas
++        4) Conceitos
++        5) Fallback
++        """
++
++        import re
++
++        texto = str(
++            scene.get("texto", "")
++            or scene.get("descricao", "")
++            or ""
++        ).strip()
++
++        if not texto:
++            return "historical documentary"
++
++        texto_lower = texto.lower()
++
++        # --------------------------------------------------
++        # EVENTOS / SISTEMAS IMPORTANTES
++        # --------------------------------------------------
++
++        eventos = {
++            "logic theorist": "Logic Theorist AI program",
++            "deep blue": "Deep Blue chess computer",
++            "alexnet": "AlexNet neural network",
++            "dartmouth": "Dartmouth Conference 1956",
++            "enigma": "Enigma machine",
++            "segunda guerra mundial": "World War II codebreaking",
++            "criptoanálise": "Bletchley Park codebreaking",
++        }
++
++        for chave, query in eventos.items():
++
++            if chave in texto_lower:
++
++                print(
++                    f"[QUERY DEBUG] Evento detectado => {query}",
++                    flush=True
++                )
++
++                return query
++
++        # --------------------------------------------------
++        # PESSOAS
++        # --------------------------------------------------
++
++        nomes = re.findall(
++            r'\b[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+'
++            r'(?:\s+[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+){1,3}',
++            texto
++        )
++
++        blacklist = {
++            "Inteligência Artificial",
++            "Segunda Guerra Mundial",
++            "Primeira Guerra Mundial",
++        }
++
++        for nome in nomes:
++
++            if nome not in blacklist:
++
++                query = f"{nome} portrait"
++
++                print(
++                    f"[QUERY DEBUG] Pessoa => {query}",
++                    flush=True
++                )
++
++                return query
++
++        # --------------------------------------------------
++        # CONCEITOS IMPORTANTES
++        # --------------------------------------------------
++
++        conceitos = {
++            "redes neurais": "early neural network diagram",
++            "rede neural": "early neural network diagram",
++            "neurônio artificial": "artificial neuron diagram",
++            "memória": "early computer memory",
++            "processamento": "mainframe computer room",
++            "computador eletrônico": "early computer laboratory",
++            "autômatos": "ancient automaton machine",
++            "autômato": "ancient automaton machine",
++        }
++
++        for chave, query in conceitos.items():
++
++            if chave in texto_lower:
++
++                print(
++                    f"[QUERY DEBUG] Conceito => {query}",
++                    flush=True
++                )
++
++                return query
++
++        # --------------------------------------------------
++        # FALLBACK
++        # --------------------------------------------------
++
++        palavras = re.findall(
++            r'\b[a-zA-ZÀ-ÿ]{5,}\b',
++            texto
++        )
++
++        stopwords = {
++            "durante",
++            "através",
++            "entretanto",
++            "também",
++            "porque",
++            "quando",
++            "essas",
++            "esses",
++            "aquela",
++            "aquele",
++            "inteligência",
++            "artificial",
++            "computadores",
++        }
++
++        palavras = [
++            p
++            for p in palavras
++            if p.lower() not in stopwords
++        ]
++
++        query = " ".join(palavras[:4])
++
++        if not query:
++            query = "historical technology"
++
++        print(
++            f"[QUERY DEBUG] Fallback => {query}",
++            flush=True
++        )
++
++        return query[:120]
+ 
+     def _retry_pending_with_clean_queries(self, scenes: List[dict], asset_map: Dict[int, str]) -> None:
+         """

@@ -1,0 +1,92 @@
+--- a/agent.py
++++ b/agent.py
+@@ -248,7 +248,7 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-QWEN_PROMPT_VERSION = "v5"
++QWEN_PROMPT_VERSION = "v6"
+ QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5-coder:3b")
+ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+ QWEN_PT_WORDS = frozenset({
+@@ -272,20 +272,16 @@
+ def _qwen_system_prompt(topic: str) -> str:
+     subject = topic.strip() or "the video topic"
+     return "\n".join([
+-        f"You prepare the input for an image generator and an image search, for one scene of a documentary about: {subject}.",
+-        "The image must show what the narration describes, literally, as a photograph taken by a documentary camera.",
++        f"You write image search queries for one scene of a documentary about: {subject}.",
+         "",
+-        "Answer with exactly these four lines and nothing else:",
+-        "PT: <2 to 4 words copied EXACTLY from the sentence: its main object, material or tool>",
+-        "QUERY: <image search query, 5 to 10 English words, lowercase, no punctuation>",
+-        "PROMPT: <image generation prompt, 25 to 60 English words, one paragraph. Start with 'Photograph of'. "
+-        "Describe the main subject and what it is doing, the setting, the camera framing (close-up, medium or wide), "
+-        "the lighting, the colours and textures, and the details that must be visible.>",
++        "Answer with exactly these two lines and nothing else:",
++        "PT: <2 to 4 words copied from the sentence: its main object, material or tool>",
++        "QUERY: <English image search query, 5 to 10 words, describing the photo: object, action, place>",
+         "",
+         "RULES:",
++        "- The QUERY must have 5 to 10 words. Never answer with one word.",
+         "- Never invent an object the sentence does not mention.",
+         "- No digits and no number words. No people, history or famous inventors unless the sentence names them.",
+-        "- No text, logos or watermarks in the image.",
+         "- If the sentence is only a call to action (like, subscribe, thanks, sign-off), answer exactly: NONE",
+     ])
+ 
+@@ -326,31 +322,32 @@
+     data = _parse_qwen_answer(raw)
+     if data.get("status") == "NONE":
+         return None, "cena sem assunto visual"
+-    pt, query, prompt = data.get("PT", ""), data.get("QUERY", ""), data.get("PROMPT", "")
+-    if not (pt and query and prompt):
+-        return None, "formato inválido (use as linhas PT:, QUERY: e PROMPT:)"
+-    if _norm_text(pt) not in _norm_text(scene_text):
+-        return None, f"'{pt}' não aparece no texto da cena"
+-    for label, value, low, high, allowed in (
+-        ("QUERY", query, 5, 10, r"[^A-Za-z ]"),
+-        ("PROMPT", prompt, 25, 60, r"[^A-Za-z ,.;:\-]"),
+-    ):
+-        if re.search(r"[^\x00-\x7F]", value):
+-            return None, f"{label} tem acento: não está em inglês"
+-        if re.search(r"\d", value) or re.search(allowed, value):
+-            return None, f"{label} tem número ou símbolo não permitido"
+-        words = [w.lower().strip(",.;:-") for w in value.split()]
+-        if not low <= len(words) <= high:
+-            return None, f"{label} com {len(words)} palavras (use de {low} a {high})"
+-        if any(w in QWEN_PT_WORDS for w in words):
+-            return None, f"{label} tem palavras em português"
+-    if any(w in QWEN_NUMBER_WORDS for w in query.lower().split()):
++    pt, query = data.get("PT", ""), data.get("QUERY", "")
++    if not (pt and query):
++        return None, "formato inválido (use as linhas PT: e QUERY:)"
++    text_norm = _norm_text(scene_text)
++    pt_content = [w for w in _norm_text(pt).split() if len(w) >= 4 and w not in QWEN_PT_WORDS]
++    if not any(w in text_norm for w in pt_content):
++        return None, f"'{pt}' não tem palavra que apareça no texto da cena"
++    query = re.sub(r"[,.;:!?\"'`]", " ", query)
++    query = " ".join(query.split()).lower()
++    if re.search(r"[^\x00-\x7F]", query):
++        return None, "QUERY tem acento: não está em inglês"
++    if re.search(r"\d", query) or re.search(r"[^a-z \-]", query):
++        return None, "QUERY tem número ou símbolo não permitido"
++    words = query.split()
++    if not 5 <= len(words) <= 10:
++        return None, f"QUERY com {len(words)} palavras (use de 5 a 10)"
++    if any(w in QWEN_PT_WORDS for w in words):
++        return None, "QUERY tem palavras em português"
++    if any(w in QWEN_NUMBER_WORDS for w in words):
+         return None, "QUERY tem número por extenso"
+-    text_norm = _norm_text(scene_text)
+-    combined = (query + " " + prompt).lower()
++    combined = query
+     if any(h in combined for h in QWEN_HISTORY_WORDS) and not any(h in text_norm for h in QWEN_HISTORY_WORDS):
+         return None, "história que o texto da cena não menciona"
+-    return {"query": query.lower(), "prompt": prompt}, ""
++    prompt = (f"Photograph of {query}, documentary style, realistic, natural lighting, "
++              f"sharp focus, medium shot, no text or logos in the image.")
++    return {"query": query, "prompt": prompt}, ""
+ 
+ 
+ def generate_visual_prompt_with_qwen(scene_text: str, topic: str = "") -> tuple:

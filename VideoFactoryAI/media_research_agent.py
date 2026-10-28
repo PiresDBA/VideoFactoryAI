@@ -203,6 +203,7 @@ class _ThreadTeeOutput:
         self._captured: List[str] = []
         self.scene_retry_count = {}
         self.max_scene_retries = 1
+        self.failed_scenes = []
 
     def write(self, value: str) -> int:
         if threading.get_ident() == self._owner:
@@ -1524,6 +1525,32 @@ class MediaResearchAgent:
                     scene_id=int(scene["id"]),
                     topic=topic,
                 )
+                reason_lower = str(
+                    visual.get("reason", "")
+                ).lower()
+
+                watermark_terms = [
+                    "watermark",
+                    "marca d'água",
+                    "shutterstock",
+                    "getty",
+                    "dreamstime",
+                    "istock",
+                    "freepik",
+                    "depositphotos",
+                ]
+
+                if any(
+                    term in reason_lower
+                    for term in watermark_terms
+                ):
+
+                    print(
+                        "    [ImageEval] "
+                        "Watermark detectado"
+                    )
+
+                    return False
                 if not isinstance(visual, dict) or not isinstance(visual.get("approved"), bool):
                     print("    [ImageEval/Gemini] Avaliação visual não confirmada; rejeitando por segurança.")
                     return False
@@ -2378,9 +2405,13 @@ class MediaResearchAgent:
                             break
 
                     if not approved:
+
                         print(
-                            "    [L2-BING] Nenhuma candidata aprovada"
+                            "[L2-BING] Nenhuma candidata aprovada"
                         )
+
+                        scene["_bing_failed"] = True
+
                         continue
 
                     print(
@@ -2388,26 +2419,17 @@ class MediaResearchAgent:
                         f"{os.path.basename(selected_file)}"
                     )
 
-                    return dest_path
-
-                    continue
+                    i_hash = _file_hash(dest_path)
                     if i_hash and i_hash in self.used_hashes:
                         print(f"    [Dedup] {name}: duplicata da Cena {self.used_hashes[i_hash]:02d}. Rejeitando...")
-                        self.used_urls.add(url)
                         try: os.remove(dest_path)
                         except Exception: pass
                         continue
-                    # Validação de compatibilidade imagem↔roteiro
-                    if not self._validate_asset(scene, dest_path, name):
-                        self.used_urls.add(url)
-                        continue
-                    print(f"    [L2-Image] {name} OK — licenca: {lic}")
-                    print(f"    [WebSearch] Escolhido: {url} | Licença: {lic}")
-                    self.used_urls.add(url)
                     if i_hash: self.used_hashes[i_hash] = sid
+                    self.used_urls.add(selected_file)
                     self.used_paths[dest_path] = sid
                     self._record_hit(name)
-                    self._add_report(sid, 2, name, url, lic, dest_path, "image")
+                    self._add_report(sid, 2, name, selected_file, lic, dest_path, "image")
                     return dest_path
                 time.sleep(0.2)
 
@@ -2786,152 +2808,177 @@ class MediaResearchAgent:
         return query
 
     def _build_simple_search_query(self, scene: dict) -> str:
-    """
-    Extrai uma query visual específica para Bing.
-    Prioridade:
-    1) Eventos históricos
-    2) Sistemas/Invenções
-    3) Pessoas
-    4) Conceitos
-    5) Fallback
-    """
+        """
+        Extrai uma query visual específica para Bing.
+        Prioridade:
+        1) Eventos históricos
+        2) Sistemas/Invenções
+        3) Pessoas
+        4) Conceitos
+        5) Fallback
+        """
 
-    import re
+        import re
 
-    texto = str(
-        scene.get("texto", "")
-        or scene.get("descricao", "")
-        or ""
-    ).strip()
+        texto = str(
+            scene.get("texto", "")
+            or scene.get("descricao", "")
+            or ""
+        ).strip()
 
-    if not texto:
-        return "historical documentary"
+        if not texto:
+            return "historical documentary"
 
-    texto_lower = texto.lower()
+        texto_lower = texto.lower()
 
-    # --------------------------------------------------
-    # EVENTOS / SISTEMAS IMPORTANTES
-    # --------------------------------------------------
+        # --------------------------------------------------
+        # EVENTOS / SISTEMAS IMPORTANTES
+        # --------------------------------------------------
 
-    eventos = {
-        "logic theorist": "Logic Theorist AI program",
-        "deep blue": "Deep Blue chess computer",
-        "alexnet": "AlexNet neural network",
-        "dartmouth": "Dartmouth Conference 1956",
-        "enigma": "Enigma machine",
-        "segunda guerra mundial": "World War II codebreaking",
-        "criptoanálise": "Bletchley Park codebreaking",
-    }
+        eventos = {
+            "logic theorist": "Logic Theorist AI program",
+            "deep blue": "Deep Blue chess computer",
+            "alexnet": "AlexNet neural network",
+            "dartmouth": "Dartmouth Conference 1956",
+            "enigma": "Enigma machine",
+            "segunda guerra mundial": "World War II codebreaking",
+            "criptoanálise": "Bletchley Park codebreaking",
+        }
 
-    for chave, query in eventos.items():
+        for chave, query in eventos.items():
 
-        if chave in texto_lower:
+            if chave in texto_lower:
 
-            print(
-                f"[QUERY DEBUG] Evento detectado => {query}",
-                flush=True
-            )
+                print(
+                    f"[QUERY DEBUG] Evento detectado => {query}",
+                    flush=True
+                )
 
-            return query
+                return query
 
-    # --------------------------------------------------
-    # PESSOAS
-    # --------------------------------------------------
+        # --------------------------------------------------
+        # PESSOAS
+        # --------------------------------------------------
 
-    nomes = re.findall(
-        r'\b[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+'
-        r'(?:\s+[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+){1,3}',
-        texto
-    )
+        nomes = re.findall(
+            r'\b[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+'
+            r'(?:\s+[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+){1,3}',
+            texto
+        )
 
-    blacklist = {
-        "Inteligência Artificial",
-        "Segunda Guerra Mundial",
-        "Primeira Guerra Mundial",
-    }
+        blacklist = {
+            "Inteligência Artificial",
+            "Segunda Guerra Mundial",
+            "Primeira Guerra Mundial",
+        }
 
-    for nome in nomes:
+        for nome in nomes:
 
-        if nome not in blacklist:
+            if nome not in blacklist:
 
-            query = f"{nome} portrait"
+                query = f"{nome} portrait"
 
-            print(
-                f"[QUERY DEBUG] Pessoa => {query}",
-                flush=True
-            )
+                print(
+                    f"[QUERY DEBUG] Pessoa => {query}",
+                    flush=True
+                )
 
-            return query
+                return query
 
-    # --------------------------------------------------
-    # CONCEITOS IMPORTANTES
-    # --------------------------------------------------
+        # --------------------------------------------------
+        # CONCEITOS IMPORTANTES
+        # --------------------------------------------------
 
-    conceitos = {
-        "redes neurais": "early neural network diagram",
-        "rede neural": "early neural network diagram",
-        "neurônio artificial": "artificial neuron diagram",
-        "memória": "early computer memory",
-        "processamento": "mainframe computer room",
-        "computador eletrônico": "early computer laboratory",
-        "autômatos": "ancient automaton machine",
-        "autômato": "ancient automaton machine",
-    }
+        conceitos = {
+            "redes neurais": "early neural network diagram",
+            "rede neural": "early neural network diagram",
+            "neurônio artificial": "artificial neuron diagram",
+            "memória": "early computer memory",
+            "processamento": "mainframe computer room",
+            "computador eletrônico": "early computer laboratory",
+            "autômatos": "ancient automaton machine",
+            "autômato": "ancient automaton machine",
+        }
 
-    for chave, query in conceitos.items():
+        for chave, query in conceitos.items():
 
-        if chave in texto_lower:
+            if chave in texto_lower:
 
-            print(
-                f"[QUERY DEBUG] Conceito => {query}",
-                flush=True
-            )
+                print(
+                    f"[QUERY DEBUG] Conceito => {query}",
+                    flush=True
+                )
 
-            return query
+                return query
 
-    # --------------------------------------------------
-    # FALLBACK
-    # --------------------------------------------------
+        # --------------------------------------------------
+        # FALLBACK
+        # --------------------------------------------------
 
-    palavras = re.findall(
-        r'\b[a-zA-ZÀ-ÿ]{5,}\b',
-        texto
-    )
+        palavras = re.findall(
+            r'\b[a-zA-ZÀ-ÿ]{5,}\b',
+            texto
+        )
 
-    stopwords = {
-        "durante",
-        "através",
-        "entretanto",
-        "também",
-        "porque",
-        "quando",
-        "essas",
-        "esses",
-        "aquela",
-        "aquele",
-        "inteligência",
-        "artificial",
-        "computadores",
-    }
+        stopwords = {
+            "durante",
+            "através",
+            "entretanto",
+            "também",
+            "porque",
+            "quando",
+            "essas",
+            "esses",
+            "aquela",
+            "aquele",
+            "inteligência",
+            "artificial",
+            "computadores",
+        }
 
-    palavras = [
-        p
-        for p in palavras
-        if p.lower() not in stopwords
-    ]
+        palavras = [
+            p
+            for p in palavras
+            if p.lower() not in stopwords
+        ]
 
-    query = " ".join(palavras[:4])
+        query = " ".join(palavras[:4])
 
-    if not query:
-        query = "historical technology"
+        if not query:
+            query = "historical technology"
+
+        print(
+            f"[QUERY DEBUG] Fallback => {query}",
+            flush=True
+        )
+
+        return query[:120]
+    def _process_pending_scene(self, scene: dict):
+
+    sid = int(scene["id"])
 
     print(
-        f"[QUERY DEBUG] Fallback => {query}",
-        flush=True
+        f"    [PENDING] Cena {sid:02d}: "
+        f"pulando Bing e indo direto para WebChat/Gemini"
     )
 
-    return query[:120]
+    # impede nova passagem pelo Bing
 
+    old_mode = self.media_source_permissions.copy()
+
+    try:
+
+        self.media_source_permissions = {
+            **self.media_source_permissions,
+            "internet_images": False,
+            "webchat": True,
+        }
+
+        return self.source_scene(scene)
+
+    finally:
+
+        self.media_source_permissions = old_mode
     def _retry_pending_with_clean_queries(self, scenes: List[dict], asset_map: Dict[int, str]) -> None:
         """
         Retenta a busca de mídia para cenas que caíram no PIL fallback (card de texto animado).
@@ -3002,7 +3049,8 @@ class MediaResearchAgent:
                     pass
 
             # Tenta buscar novamente
-            new_path = self.source_scene(scene)
+            new_path = self._process_pending_scene(scene)
+
             if new_path:
                 asset_map[scene_id] = new_path
                 print(f"    [RETRY] ✓ Cena {scene_id:02d}: mídia real encontrada!")
@@ -3199,10 +3247,25 @@ class MediaResearchAgent:
                 continue
             print(f"\n  [{idx:02d}/{total:02d}] Pesquisando midia para cena {sid:02d}...")
             path = self.source_scene(scene)
-            if path:
-                asset_map[sid] = path
-                attempted_scene_ids.add(sid)
 
+            if path:
+
+                asset_map[sid] = path
+
+            else:
+
+                self.failed_scenes.append(
+                    {
+                        "scene_id": sid,
+                        "query": scene.get("query"),
+                        "texto": scene.get("texto"),
+                    }
+                )
+            print(
+                "\n[FAILURES]",
+                len(self.failed_scenes),
+                "cenas sem mídia aprovada"
+            )
         local_only = (
             getattr(self, "media_source_mode", "legacy") == "local_only"
             or (

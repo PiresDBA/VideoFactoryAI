@@ -1,0 +1,51 @@
+--- a/agent.py
++++ b/agent.py
+@@ -248,7 +248,7 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-QWEN_PROMPT_VERSION = "v7"
++QWEN_PROMPT_VERSION = "v8"
+ QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5-coder:3b")
+ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+ QWEN_PT_WORDS = frozenset({
+@@ -307,14 +307,27 @@
+ 
+ 
+ def _parse_qwen_answer(raw: str) -> dict:
+-    text = str(raw or "").strip()
+-    if text.upper().startswith("NONE"):
++    """Extrai PT/QUERY da resposta, tolerando markdown, listas, bloco <think> e JSON."""
++    text = str(raw or "")
++    text = re.sub(r"(?is)<think>.*?</think>", " ", text).strip()
++    if text.upper().startswith("NONE") or text.strip().strip("*_`'\"").upper() == "NONE":
+         return {"status": "NONE"}
+-    parts = re.split(r"(?im)^\s*(PT|QUERY|PROMPT)\s*:\s*", text)
++    if text.lstrip().startswith("{"):
++        try:
++            data = json.loads(text[text.index("{"): text.rindex("}") + 1])
++            out = {str(k).upper(): " ".join(str(v).split()) for k, v in data.items()}
++            if out.get("PT") or out.get("QUERY"):
++                return out
++        except Exception:
++            pass
++    cleaned = re.sub(r"[*_`#]", "", text)
++    cleaned = re.sub(r"(?m)^\s*(?:[-•]|\d+[.)])\s*", "", cleaned)
++    parts = re.split(r"(?im)^\s*(PT|QUERY|PROMPT)\s*[:\-–]\s*", cleaned)
+     out = {}
+     for i in range(1, len(parts) - 1, 2):
+         out[parts[i].upper()] = " ".join(parts[i + 1].split()).strip().strip("\"'`").strip()
+     return out
++
+ 
+ 
+ def _validate_qwen_answer(raw: str, scene_text: str) -> tuple:
+@@ -376,6 +389,8 @@
+             print(f"[QWEN ERRO] {exc}", flush=True)
+             return "", ""
+         result, reason = _validate_qwen_answer(raw, scene_text)
++        if result is None and reason.startswith("formato"):
++            print(f"[QWEN RESPOSTA BRUTA] {str(raw)[:240]!r}", flush=True)
+         if result is None and reason == "cena sem assunto visual":
+             break
+         if result:

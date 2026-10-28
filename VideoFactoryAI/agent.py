@@ -107,21 +107,21 @@ from pipeline_resume import (
 # não estiver instalada, o sistema não falha na inicialização do script ou no --help.
 
 #agente usando ollama para criar busca de iamgem com texto sugestivo / adequado
-QWEN_CACHE_FILE = Path("qwen_visual_queries.json")
+OLLAMA_CACHE_FILE = Path("ollama_visual_queries.json")
 
 
-def _load_qwen_cache():
-    if QWEN_CACHE_FILE.exists():
+def _load_ollama_cache():
+    if OLLAMA_CACHE_FILE.exists():
         try:
-            return json.loads(QWEN_CACHE_FILE.read_text(encoding="utf-8"))
+            return json.loads(OLLAMA_CACHE_FILE.read_text(encoding="utf-8"))
         except:
             return {}
     return {}
 
 
-def _save_qwen_cache(cache):
+def _save_ollama_cache(cache):
     try:
-        QWEN_CACHE_FILE.write_text(
+        OLLAMA_CACHE_FILE.write_text(
             json.dumps(cache, ensure_ascii=False, indent=2),
             encoding="utf-8"
         )
@@ -248,95 +248,204 @@ if _ffmpeg_found is None:
     )
 ffmpeg_path = str(_ffmpeg_found)
 
-def generate_visual_query_with_qwen(scene_text: str) -> str:
-    """
-    Converte uma cena em uma query visual curta.
-    Usa Qwen 2.5 3B local via Ollama.
-    """
+OLLAMA_PROMPT_VERSION = "v11"
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL") or os.getenv("QWEN_MODEL") or "gemma4-turbo-perfeito"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_PT_WORDS = frozenset({
+    "de", "do", "da", "dos", "das", "em", "na", "nos", "nas", "com", "para", "por",
+    "uma", "um", "os", "que", "entre", "aos", "pelo",
+})
+OLLAMA_NUMBER_WORDS = frozenset({
+    "zero", "um", "uma", "dois", "duas", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez",
+    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+})
+OLLAMA_HISTORY_WORDS = ("histor", "invent", "discover", "famous", "inventor")
 
+
+def _norm_text(text: str) -> str:
+    import unicodedata
+    text = unicodedata.normalize("NFKD", str(text or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+_VISUAL_CONTEXT_CACHE = None
+
+
+def _load_visual_context() -> dict:
+    """Assunto do vídeo e termos do domínio, lidos de visual_context.json (editável)."""
+    global _VISUAL_CONTEXT_CACHE
+    if _VISUAL_CONTEXT_CACHE is not None:
+        return _VISUAL_CONTEXT_CACHE
+    path = Path(os.getenv("VISUAL_CONTEXT_FILE") or Path(__file__).resolve().parent / "visual_context.json")
+    context = {"subject": "", "domain_terms": [], "require_domain_term": False}
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            context["subject"] = str(data.get("subject", "")).strip()
+            context["domain_terms"] = [str(t).strip().lower() for t in data.get("domain_terms", []) if str(t).strip()]
+            context["require_domain_term"] = bool(data.get("require_domain_term", False))
+        except Exception as exc:
+            print(f"[OLLAMA AVISO] visual_context.json inválido: {exc}", flush=True)
+    else:
+        print(f"[OLLAMA AVISO] {path.name} não encontrado: a query não será checada pelo tema.", flush=True)
+    _VISUAL_CONTEXT_CACHE = context
+    return context
+
+
+def _ollama_system_prompt(topic: str) -> str:
+    subject = topic.strip() or "the video topic"
+    return "\n".join([
+        f"You write image search queries for one scene of a documentary about: {_load_visual_context()['subject'] or subject}.",
+        "Every QUERY must be about that subject: show the real objects, materials and places of that subject, never an unrelated object.",
+        "",
+        "Answer with exactly these two lines and nothing else:",
+        "PT: <2 to 4 words copied from the sentence: its main object, material or tool>",
+        "QUERY: <English image search query, 5 to 10 words, describing the photo: object, action, place>",
+        "",
+        "RULES:",
+        "- The QUERY must have 5 to 10 words. Never answer with one word.",
+        "- Never invent an object the sentence does not mention.",
+        "- No digits and no number words. No people, history or famous inventors unless the sentence names them.",
+        "- If the sentence is only a call to action (like, subscribe, thanks, sign-off), answer exactly: NONE",
+    ])
+
+
+def _ollama_chat(system: str, user: str) -> str:
+    import urllib.request
+    body = {
+        "model": OLLAMA_MODEL,
+        "stream": False,
+        "think": False,
+        "keep_alive": "30m",
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "options": {"temperature": 0, "num_predict": 160},
+    }
+    request = urllib.request.Request(
+        OLLAMA_URL.rstrip("/") + "/api/chat",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=180) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    message = data.get("message") or {}
+    content = str(message.get("content", "") or "")
+    if not content.strip():
+        # Modelos com raciocínio podem colocar a resposta em "thinking" quando o corte de tokens acontece antes.
+        content = str(message.get("thinking", "") or "")
+        print(f"[OLLAMA AVISO] resposta vazia (done_reason={data.get('done_reason')}); usando o campo de raciocínio", flush=True)
+    return content
+
+def _parse_ollama_answer(raw: str) -> dict:
+    """Extrai PT/QUERY da resposta, tolerando markdown, listas, bloco <think> e JSON."""
+    text = str(raw or "")
+    text = re.sub(r"(?is)<think>.*?</think>", " ", text).strip()
+    if text.upper().startswith("NONE") or text.strip().strip("*_`'\"").upper() == "NONE":
+        return {"status": "NONE"}
+    if text.lstrip().startswith("{"):
+        try:
+            data = json.loads(text[text.index("{"): text.rindex("}") + 1])
+            out = {str(k).upper(): " ".join(str(v).split()) for k, v in data.items()}
+            if out.get("PT") or out.get("QUERY"):
+                return out
+        except Exception:
+            pass
+    cleaned = re.sub(r"[*_`#]", "", text)
+    cleaned = re.sub(r"(?m)^\s*(?:[-•]|\d+[.)])\s*", "", cleaned)
+    parts = re.split(r"(?im)^\s*(PT|QUERY|PROMPT)\s*[:\-–]\s*", cleaned)
+    out = {}
+    for i in range(1, len(parts) - 1, 2):
+        out[parts[i].upper()] = " ".join(parts[i + 1].split()).strip().strip("\"'`").strip()
+    if any(str(out.get(k, "")).strip(" *_.").upper() == "NONE" for k in ("PT", "QUERY")):
+        return {"status": "NONE"}
+    return out
+
+
+
+def _validate_ollama_answer(raw: str, scene_text: str) -> tuple:
+    """Retorna (resultado, motivo). resultado é None quando rejeitada."""
+    data = _parse_ollama_answer(raw)
+    if data.get("status") == "NONE":
+        return None, "cena sem assunto visual"
+    pt, query = data.get("PT", ""), data.get("QUERY", "")
+    if not (pt and query):
+        return None, "formato inválido (use as linhas PT: e QUERY:)"
+    text_norm = _norm_text(scene_text)
+    pt_content = [w for w in _norm_text(pt).split() if len(w) >= 4 and w not in OLLAMA_PT_WORDS]
+    if not any(w in text_norm for w in pt_content):
+        return None, f"'{pt}' não tem palavra que apareça no texto da cena"
+    query = re.sub(r"[,.;:!?\"'`]", " ", query)
+    query = " ".join(query.split()).lower()
+    import unicodedata
+    query = unicodedata.normalize("NFKD", query).encode("ascii", "ignore").decode("ascii")
+    query = " ".join(query.split()).lower()
+    if re.search(r"\d", query) or re.search(r"[^a-z \-]", query):
+        return None, "QUERY tem número ou símbolo não permitido"
+    words = query.split()
+    if not 5 <= len(words) <= 10:
+        return None, f"QUERY com {len(words)} palavras (use de 5 a 10)"
+    if any(w in OLLAMA_PT_WORDS for w in words):
+        return None, "QUERY tem palavras em português"
+    if any(w in OLLAMA_NUMBER_WORDS for w in words):
+        return None, "QUERY tem número por extenso"
+    context = _load_visual_context()
+    if context["require_domain_term"] and context["domain_terms"]:
+        if not any(term in query for term in context["domain_terms"]):
+            return None, "QUERY fora do tema do vídeo: use objetos, materiais ou lugares do assunto"
+    combined = query
+    if any(h in combined for h in OLLAMA_HISTORY_WORDS) and not any(h in text_norm for h in OLLAMA_HISTORY_WORDS):
+        return None, "história que o texto da cena não menciona"
+    prompt = (f"Photograph of {query}, documentary style, realistic, natural lighting, "
+              f"sharp focus, medium shot, no text or logos in the image.")
+    return {"query": query, "prompt": prompt}, ""
+
+
+def generate_visual_prompt_with_ollama(scene_text: str, topic: str = "") -> tuple:
+    """Retorna (query_de_busca, prompt_de_geracao) para a cena. ("", "") se não houver resposta válida."""
+    scene_text = (scene_text or "").strip()
     if not scene_text:
-        return ""
+        return "", ""
 
-    cache = _load_qwen_cache()
-
+    cache = _load_ollama_cache()
     cache_key = hashlib.md5(
-        scene_text.strip().encode("utf-8")
+        f"{OLLAMA_PROMPT_VERSION}|{OLLAMA_MODEL}|{topic}|{_load_visual_context()['subject']}|{scene_text}".encode("utf-8")
     ).hexdigest()
+    if cache_key in cache and isinstance(cache[cache_key], dict):
+        return cache[cache_key]["query"], cache[cache_key]["prompt"]
 
-    if cache_key in cache:
-        return cache[cache_key]
+    system = _ollama_system_prompt(topic)
+    reason = ""
+    for _ in range(2):
+        user = f"Sentence: {scene_text}"
+        if reason:
+            user += f"\nYour previous answer was rejected ({reason}). Answer again, following all rules."
+        try:
+            raw = _ollama_chat(system, user)
+        except Exception as exc:
+            print(f"[OLLAMA ERRO] {exc}", flush=True)
+            return "", ""
+        result, reason = _validate_ollama_answer(raw, scene_text)
+        if result is None and reason.startswith("formato"):
+            print(f"[OLLAMA RESPOSTA BRUTA] {str(raw)[:240]!r}", flush=True)
+        if result is None and reason == "cena sem assunto visual":
+            break
+        if result:
+            cache[cache_key] = result
+            _save_ollama_cache(cache)
+            print(f"[OLLAMA QUERY] {result['query']}", flush=True)
+            print(f"[OLLAMA PROMPT] {result['prompt'][:160]}", flush=True)
+            return result["query"], result["prompt"]
 
-    prompt = f"""
-You are an expert documentary visual researcher.
+    print(f"[OLLAMA REJEITADA] {reason} | texto={scene_text[:80]}", flush=True)
+    return "", ""
 
-Convert the narration into a SHORT image search query.
 
-RULES:
-- English
-- Maximum 8 words
-- Focus on visual subject
-- Historical figures should be prioritized
-- Historical inventions should be prioritized
-- No explanation
-- No quotes
-- Return only the query
+def generate_visual_query_with_ollama(scene_text: str, topic: str = "") -> str:
+    """Compatibilidade: devolve só a query de busca."""
+    return generate_visual_prompt_with_ollama(scene_text, topic)[0]
 
-Narration:
 
-{scene_text}
-"""
-
-    try:
-
-        result = subprocess.run(
-            [
-                "ollama",
-                "run",
-                "qwen2.5-coder:3b"
-            ],
-            input=prompt.encode("utf-8"),
-            capture_output=True,
-            timeout=60
-        )
-        output = result.stdout.decode(
-            "utf-8",
-            errors="replace"
-        ).strip()
-        query = result.stdout.strip()
-        query = query.split("\n")[0]
-
-        query = query.replace(",", " ")
-
-        query = " ".join(query.split())
-
-        words = query.split()
-
-        query = " ".join(words[:6])
-        query = query.replace('"', "")
-        query = query.replace("'", "")
-        query = query.replace("\n", " ")
-
-        if query:
-
-            cache[cache_key] = query
-
-            _save_qwen_cache(cache)
-
-            print(
-                f"[QWEN QUERY] {query}",
-                flush=True
-            )
-
-            return query
-
-    except Exception as e:
-
-        print(
-            f"[QWEN ERRO] {e}",
-            flush=True
-        )
-
-    return ""
 def extract_historical_person(scene_text: str):
 
     import re
@@ -1521,15 +1630,15 @@ def _get_topic_visual_fallback(topic: str, canal: str, scene_idx: int, used_quer
             False
         )
 
-    qwen_query = generate_visual_query_with_qwen(scene_text)
+    ollama_query, ollama_prompt = generate_visual_prompt_with_ollama(scene_text, topic=topic)
 
-    if qwen_query:
+    if ollama_query:
 
         return (
             "image",
-            qwen_query,
+            ollama_query,
             "",
-            qwen_query,
+            ollama_prompt or ollama_query,
             False
         )
 
@@ -2743,6 +2852,8 @@ def parse_args():
     # Pipeline control - permite executar apenas partes do pipeline
     p.add_argument("--script-only", action="store_true", default=False,
                    help="Apenas gerar/planejar o roteiro (passo 1), sem TTS/mídia/render")
+    p.add_argument("--scenes-only", action="store_true", default=False,
+                   help="Gera só o plano de cenas (ckpts/scenes_planned.json) a partir do roteiro e para.")
     p.add_argument("--images-only", action="store_true", default=False,
                    help="Apenas buscar/gerar mídias (passo 4), precisa de roteiro e áudio existentes")
     p.add_argument("--render-only", action="store_true", default=False,
@@ -2771,12 +2882,12 @@ def parse_args():
         p.error("--youtube-authorized-file exige --youtube-rights-confirmed.")
 
     # Validação de controle de pipeline
-    pipeline_modes = [args.script_only, args.images_only, args.render_only]
+    pipeline_modes = [args.script_only, args.scenes_only, args.images_only, args.render_only]
     if sum(pipeline_modes) > 1:
         p.error("--script-only, --images-only e --render-only são mutuamente exclusivos.")
 
     # --images-only e --render-only exigem roteiro existente
-    if (args.images_only or args.render_only) and not args.roteiro:
+    if (args.images_only or args.render_only or args.scenes_only) and not args.roteiro:
         p.error("--images-only e --render-only exigem um arquivo de roteiro (--roteiro / caminho do .txt).")
     # --render-only precisa de mídia pré-existente
     if args.render_only and not args.subtitles_only:
@@ -3243,12 +3354,15 @@ def main():
     # -------------------------------------------------------------------------
     # TRATAMENTO DE RETOMADA OU LIMPEZA DE PRODUÇÃO NOVA
     # -------------------------------------------------------------------------
+    scenes_only = getattr(args, "scenes_only", False)
     state = {}
-    if resume_mode and not args.no_checkpoint:
+    if (resume_mode or scenes_only) and not args.no_checkpoint:
         state = load_checkpoint(checkpoint)
-        if state:
+        if scenes_only:
+            state.pop("scenes", None)  # cenas novas: não reaproveita o plano antigo do checkpoint
+        if state and resume_mode:
             log("Retomando execução a partir do checkpoint salvo...")
-    else:
+    elif not scenes_only:
         # Se for uma nova execução (sem --resume), limpa os temporários da produção
         # anterior deste projeto específico
         for f in [
@@ -3283,6 +3397,10 @@ def main():
     if state.get("scenes"):
         scenes = state["scenes"]
         log(f"  Cenas carregadas do checkpoint: {len(scenes)} cenas")
+    elif (images_only or render_only) and plan_path.exists():
+        # Mídias e render usam o JSON de cenas que você revisou (não replaneja).
+        scenes = json.loads(plan_path.read_text(encoding="utf-8"))
+        log(f"  Cenas carregadas de {plan_path.name}: {len(scenes)} cenas")
     else:
         # Verifica se o Gem já definiu as cenas (modo VF_MODO_ESCRITA=gem)
         gem_extras_path = ROOT_DIR / "roteiros" / f"{slug_topic}_gem_extras.json"
@@ -3347,8 +3465,16 @@ def main():
             f"({sum(1 for s in scenes if s['tipo']=='video')} vídeo | "
             f"{sum(1 for s in scenes if s['tipo']=='image')} imagem)")
         plan_path.parent.mkdir(parents=True, exist_ok=True)
+        # Plano antigo vira *_old.json (não é apagado); o novo passa a ser o oficial.
+        if plan_path.exists():
+            plan_path.replace(plan_path.with_name("scenes_planned_old.json"))
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
         with open(plan_path, "w", encoding="utf-8") as f:
             json.dump(scenes, f, ensure_ascii=False, indent=2)
+        if scenes_only:
+            print(f"\n[OK] Cenas salvas em: {plan_path}")
+            print(f"[OK] {len(scenes)} cenas. Revise o JSON se quiser e rode as mídias com --images-only.")
+            return
         if not args.no_checkpoint:
             state["scenes"] = scenes
             save_checkpoint(state, checkpoint)
