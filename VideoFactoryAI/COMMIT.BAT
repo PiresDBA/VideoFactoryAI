@@ -38,6 +38,12 @@ echo ERRO
 echo Falha durante backup
 echo ======================================
 echo.
+for /f %%i in ('git rev-parse --short HEAD') do set HASH=%%i
 
+echo.
+echo ======================================
+echo SUCESSO
+echo Commit: %HASH%
+echo ======================================
 pause
 exit /b 1
