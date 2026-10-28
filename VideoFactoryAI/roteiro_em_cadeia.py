@@ -81,6 +81,13 @@ def limpar_roteiro(texto: str) -> str:
         t = t[:m.start()]
     t = re.sub(r"[*#`]+", "", t)
     t = re.sub(r"^\s*(roteiro|script|narração|narracao)\s*:?\s*$", "", t, flags=re.M | re.I)
+    t = re.sub(r"^\s*you\s+said:.*$", "", t, flags=re.M | re.I)
+    t = re.sub(r"^\s*\.\.\..*$", "", t, flags=re.M | re.I)
+    t = re.sub(r"^\s*show\s+more\s*$", "", t, flags=re.M | re.I)
+    t = re.sub(r"^\s*chat\s+gpt\s*$", "", t, flags=re.M | re.I)
+    t = re.sub(r"^\s*a\s+ideia\s+central.*", "", t, flags=re.M | re.I)
+    t = re.sub(r"^\s*escrita\s+e\s+abaixo\s+de\s+se\s+escrita.*", "", t, flags=re.M | re.I)
+    t = re.sub(r"^\s*written\s*:\s*.*$", "", t, flags=re.M | re.I)
     t = re.sub(r"\n{3,}", "\n\n", t)
     return t.strip()
 
