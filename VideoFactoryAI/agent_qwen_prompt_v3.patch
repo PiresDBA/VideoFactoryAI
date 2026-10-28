@@ -1,0 +1,133 @@
+--- a/agent.py
++++ b/agent.py
+@@ -248,43 +248,46 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-QWEN_PROMPT_VERSION = "v2"
++QWEN_PROMPT_VERSION = "v3"
+ QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5-coder:3b")
+ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+-QWEN_EXAMPLES = [
+-    ("Lixamos o topo da cortiça com lixa grão 120 para deixar a superfície plana.",
+-     "sanding cork sheet with sandpaper"),
+-    ("A cola de lastro é feita com partes iguais de cola branca e água destilada.",
+-     "white glue and water mixture"),
+-    ("Se você gostou, deixe seu like e inscreva-se no canal.",
+-     "NONE"),
+-]
+ QWEN_PT_WORDS = frozenset({
+     "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas", "com", "para", "por",
+     "uma", "um", "os", "as", "o", "a", "e", "que", "sobre", "entre", "ao", "aos", "pelo",
+ })
+ QWEN_HISTORY_WORDS = ("histor", "invent", "discover", "famous", "inventor")
++QWEN_NUMBER_WORDS = frozenset({
++    "zero", "um", "uma", "dois", "duas", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez",
++    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
++})
++
++
++def _norm_text(text: str) -> str:
++    import unicodedata
++    text = unicodedata.normalize("NFKD", str(text or ""))
++    text = "".join(ch for ch in text if not unicodedata.combining(ch))
++    return re.sub(r"\s+", " ", text).strip().lower()
+ 
+ 
+ def _qwen_system_prompt(topic: str) -> str:
+     subject = topic.strip() or "the video topic"
+-    lines = [
++    return "\n".join([
+         f"You write image search queries for a documentary about: {subject}.",
+-        "Given one narration sentence, write the search query for the photo that should appear on screen while it is narrated.",
++        "",
++        "TASK, in two steps:",
++        "1. PT: copy from the sentence the main concrete object, material or tool it talks about.",
++        "   Copy it EXACTLY as written in the sentence, 2 to 4 words.",
++        "2. EN: translate that copied phrase into English, 2 to 5 words, lowercase.",
++        "",
++        "Answer with exactly these two lines and nothing else:",
++        "PT: <phrase copied from the sentence>",
++        "EN: <english query>",
+         "",
+         "RULES:",
+-        "- Describe what the viewer SEES: a concrete object, material, tool, place or action named or clearly implied by the sentence.",
+-        "- Keep the specific object names from the sentence, translated to English.",
+-        "- 2 to 5 English words. Output only the query: lowercase, no punctuation, no quotes, no explanation.",
+-        "- Do NOT add people, history, or famous inventors unless the sentence names them.",
+-        "- If the sentence is only a call to action (like, subscribe, thanks, sign-off), output exactly: NONE",
+-        "",
+-        "EXAMPLES:",
+-    ]
+-    for sentence, query in QWEN_EXAMPLES:
+-        lines.append(f"Sentence: {sentence}")
+-        lines.append(f"Query: {query}")
+-    return "\n".join(lines)
++        "- Never invent an object the sentence does not mention.",
++        "- No digits, no punctuation, no people, no history, no famous inventors unless the sentence names them.",
++        "- If the sentence is only a call to action (like, subscribe, thanks, sign-off), answer exactly: NONE",
++    ])
+ 
+ 
+ def _ollama_chat(system: str, user: str) -> str:
+@@ -307,25 +310,45 @@
+     return str((data.get("message") or {}).get("content", ""))
+ 
+ 
++def _parse_qwen_answer(raw: str) -> tuple:
++    """Extrai (trecho_pt, query_en) da resposta. Ambos vazios se o formato não bate."""
++    text = str(raw or "").strip()
++    if text.upper().startswith("NONE"):
++        return "NONE", ""
++    pt = en = ""
++    for line in text.splitlines():
++        line = line.strip().strip("\"'`")
++        low = line.lower()
++        if low.startswith("pt:"):
++            pt = line[3:].strip().strip("\"'`").strip()
++        elif low.startswith("en:"):
++            en = line[3:].strip().strip("\"'`").strip()
++    return pt, en
++
++
+ def _validate_qwen_query(raw: str, scene_text: str) -> tuple:
+-    """Retorna (query_limpa, motivo_da_rejeicao). query_limpa vazia = rejeitada."""
+-    line = next((item.strip() for item in str(raw or "").splitlines() if item.strip()), "")
+-    line = line.strip("\"'`").strip()
+-    if not line:
+-        return "", "resposta vazia"
+-    if line.upper() == "NONE":
++    """Retorna (query_en, motivo). query_en vazia = rejeitada."""
++    pt, en = _parse_qwen_answer(raw)
++    if pt == "NONE":
+         return "", "cena sem assunto visual"
+-    if re.search(r"[^\x00-\x7F]", line):
+-        return "", "contém acento: não está em inglês"
+-    cleaned = re.sub(r"[^A-Za-z\- ]", " ", line).lower()
+-    words = cleaned.split()
++    if not pt or not en:
++        return "", "formato inválido (use as linhas PT: e EN:)"
++    if _norm_text(pt) not in _norm_text(scene_text):
++        return "", f"'{pt}' não aparece no texto da cena"
++    if re.search(r"[^\x00-\x7F]", en):
++        return "", "a query tem acento: não está em inglês"
++    if re.search(r"\d", en) or re.search(r"[^A-Za-z ]", en):
++        return "", "a query tem número ou pontuação"
++    words = en.lower().split()
+     if not 2 <= len(words) <= 5:
+         return "", f"{len(words)} palavras (use de 2 a 5)"
+-    pt = [w for w in words if w in QWEN_PT_WORDS]
+-    if pt:
+-        return "", "palavras em português: " + ", ".join(pt)
+-    text_lower = scene_text.lower()
+-    if any(h in cleaned for h in QWEN_HISTORY_WORDS) and not any(h in text_lower for h in QWEN_HISTORY_WORDS):
++    if any(w in QWEN_NUMBER_WORDS for w in words):
++        return "", "número por extenso na query"
++    pt_hits = [w for w in words if w in QWEN_PT_WORDS]
++    if pt_hits:
++        return "", "palavras em português: " + ", ".join(pt_hits)
++    text_norm = _norm_text(scene_text)
++    if any(h in " ".join(words) for h in QWEN_HISTORY_WORDS) and not any(h in text_norm for h in QWEN_HISTORY_WORDS):
+         return "", "história que o texto da cena não menciona"
+     return " ".join(words), ""
+ 

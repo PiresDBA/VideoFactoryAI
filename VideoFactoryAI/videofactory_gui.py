@@ -1036,16 +1036,17 @@ class VideoFactoryGUI(tk.Tk):
         self.log_text.configure(state="disabled")
 
     def _save_log(self) -> None:
-        """Salva o conteúdo visível do log em arquivo UTF-8 sem limpá-lo."""
+        """Salva o log visível em <projeto>.log, com o nome do projeto atual."""
         try:
             project = Path(self.project_dir.get()).expanduser()
             logs_dir = project / "logs"
             logs_dir.mkdir(parents=True, exist_ok=True)
-            base = "makete_ho.log"
-            target = logs_dir / base
+            slug = self._project_slug_from_current_input() or self.project_choice.get().strip() or "projeto"
+            slug = self._slugify(slug)
+            target = logs_dir / f"{slug}.log"
             index = 2
             while target.exists():
-                target = logs_dir / f"makete_ho{index}.log"
+                target = logs_dir / f"{slug}_{index}.log"
                 index += 1
             content = self.log_text.get("1.0", "end-1c")
             target.write_text(content, encoding="utf-8", errors="replace")

@@ -1,0 +1,23 @@
+--- a/agent.py
++++ b/agent.py
+@@ -248,7 +248,7 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-QWEN_PROMPT_VERSION = "v6"
++QWEN_PROMPT_VERSION = "v7"
+ QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5-coder:3b")
+ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+ QWEN_PT_WORDS = frozenset({
+@@ -331,8 +331,9 @@
+         return None, f"'{pt}' não tem palavra que apareça no texto da cena"
+     query = re.sub(r"[,.;:!?\"'`]", " ", query)
+     query = " ".join(query.split()).lower()
+-    if re.search(r"[^\x00-\x7F]", query):
+-        return None, "QUERY tem acento: não está em inglês"
++    import unicodedata
++    query = unicodedata.normalize("NFKD", query).encode("ascii", "ignore").decode("ascii")
++    query = " ".join(query.split()).lower()
+     if re.search(r"\d", query) or re.search(r"[^a-z \-]", query):
+         return None, "QUERY tem número ou símbolo não permitido"
+     words = query.split()

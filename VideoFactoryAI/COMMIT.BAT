@@ -8,9 +8,20 @@ echo VideoFactoryAI - Snapshot
 echo ======================================
 echo.
 
+git diff --quiet
+
+if %errorlevel%==0 (
+    echo.
+    echo Nenhuma alteracao encontrada.
+    pause
+    exit /b 0
+)
+
 git add .
 
 if errorlevel 1 goto erro
+
+
 
 git commit -m "AutoSave %date% %time%"
 

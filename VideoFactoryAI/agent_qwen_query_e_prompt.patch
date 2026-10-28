@@ -1,0 +1,236 @@
+--- a/agent.py
++++ b/agent.py
+@@ -248,18 +248,18 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-QWEN_PROMPT_VERSION = "v4"
++QWEN_PROMPT_VERSION = "v5"
+ QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5-coder:3b")
+ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+ QWEN_PT_WORDS = frozenset({
+     "de", "do", "da", "dos", "das", "em", "na", "nos", "nas", "com", "para", "por",
+     "uma", "um", "os", "que", "entre", "aos", "pelo",
+ })
+-QWEN_HISTORY_WORDS = ("histor", "invent", "discover", "famous", "inventor")
+ QWEN_NUMBER_WORDS = frozenset({
+     "zero", "um", "uma", "dois", "duas", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez",
+     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+ })
++QWEN_HISTORY_WORDS = ("histor", "invent", "discover", "famous", "inventor")
+ 
+ 
+ def _norm_text(text: str) -> str:
+@@ -272,21 +272,20 @@
+ def _qwen_system_prompt(topic: str) -> str:
+     subject = topic.strip() or "the video topic"
+     return "\n".join([
+-        f"You write image search queries for a documentary about: {subject}.",
++        f"You prepare the input for an image generator and an image search, for one scene of a documentary about: {subject}.",
++        "The image must show what the narration describes, literally, as a photograph taken by a documentary camera.",
+         "",
+-        "TASK, in two steps:",
+-        "1. PT: copy from the sentence the main concrete object, material or tool it talks about.",
+-        "   Copy it EXACTLY as written in the sentence, 2 to 4 words.",
+-        "2. EN: write an English image search query of 5 to 10 words that describes the scene with that object, its action and its place, lowercase.",
+-        "",
+-        "Answer with exactly these two lines and nothing else:",
+-        "PT: <phrase copied from the sentence>",
+-        "EN: <english query>",
++        "Answer with exactly these four lines and nothing else:",
++        "PT: <2 to 4 words copied EXACTLY from the sentence: its main object, material or tool>",
++        "QUERY: <image search query, 5 to 10 English words, lowercase, no punctuation>",
++        "PROMPT: <image generation prompt, 25 to 60 English words, one paragraph. Start with 'Photograph of'. "
++        "Describe the main subject and what it is doing, the setting, the camera framing (close-up, medium or wide), "
++        "the lighting, the colours and textures, and the details that must be visible.>",
+         "",
+         "RULES:",
+-        "- The EN query must have 5 to 10 words. Never answer with a single word.",
+         "- Never invent an object the sentence does not mention.",
+-        "- No digits, no punctuation, no people, no history, no famous inventors unless the sentence names them.",
++        "- No digits and no number words. No people, history or famous inventors unless the sentence names them.",
++        "- No text, logos or watermarks in the image.",
+         "- If the sentence is only a call to action (like, subscribe, thanks, sign-off), answer exactly: NONE",
+     ])
+ 
+@@ -298,7 +297,7 @@
+         "stream": False,
+         "keep_alive": "30m",
+         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+-        "options": {"temperature": 0, "num_predict": 48},
++        "options": {"temperature": 0, "num_predict": 160},
+     }
+     request = urllib.request.Request(
+         OLLAMA_URL.rstrip("/") + "/api/chat",
+@@ -306,92 +305,95 @@
+         headers={"Content-Type": "application/json"},
+         method="POST",
+     )
+-    with urllib.request.urlopen(request, timeout=60) as response:
++    with urllib.request.urlopen(request, timeout=90) as response:
+         data = json.loads(response.read().decode("utf-8"))
+     return str((data.get("message") or {}).get("content", ""))
+ 
+ 
+-def _parse_qwen_answer(raw: str) -> tuple:
+-    """Extrai (trecho_pt, query_en) da resposta. Ambos vazios se o formato não bate."""
++def _parse_qwen_answer(raw: str) -> dict:
+     text = str(raw or "").strip()
+     if text.upper().startswith("NONE"):
+-        return "NONE", ""
+-    pt = en = ""
+-    for line in text.splitlines():
+-        line = line.strip().strip("\"'`")
+-        low = line.lower()
+-        if low.startswith("pt:"):
+-            pt = line[3:].strip().strip("\"'`").strip()
+-        elif low.startswith("en:"):
+-            en = line[3:].strip().strip("\"'`").strip()
+-    return pt, en
+-
+-
+-def _validate_qwen_query(raw: str, scene_text: str) -> tuple:
+-    """Retorna (query_en, motivo). query_en vazia = rejeitada."""
+-    pt, en = _parse_qwen_answer(raw)
+-    if pt == "NONE":
+-        return "", "cena sem assunto visual"
+-    if not pt or not en:
+-        return "", "formato inválido (use as linhas PT: e EN:)"
++        return {"status": "NONE"}
++    parts = re.split(r"(?im)^\s*(PT|QUERY|PROMPT)\s*:\s*", text)
++    out = {}
++    for i in range(1, len(parts) - 1, 2):
++        out[parts[i].upper()] = " ".join(parts[i + 1].split()).strip().strip("\"'`").strip()
++    return out
++
++
++def _validate_qwen_answer(raw: str, scene_text: str) -> tuple:
++    """Retorna (resultado, motivo). resultado é None quando rejeitada."""
++    data = _parse_qwen_answer(raw)
++    if data.get("status") == "NONE":
++        return None, "cena sem assunto visual"
++    pt, query, prompt = data.get("PT", ""), data.get("QUERY", ""), data.get("PROMPT", "")
++    if not (pt and query and prompt):
++        return None, "formato inválido (use as linhas PT:, QUERY: e PROMPT:)"
+     if _norm_text(pt) not in _norm_text(scene_text):
+-        return "", f"'{pt}' não aparece no texto da cena"
+-    if re.search(r"[^\x00-\x7F]", en):
+-        return "", "a query tem acento: não está em inglês"
+-    if re.search(r"\d", en) or re.search(r"[^A-Za-z ]", en):
+-        return "", "a query tem número ou pontuação"
+-    words = en.lower().split()
+-    if not 5 <= len(words) <= 10:
+-        return "", f"{len(words)} palavras (use de 5 a 10)"
+-    if any(w in QWEN_NUMBER_WORDS for w in words):
+-        return "", "número por extenso na query"
+-    pt_hits = [w for w in words if w in QWEN_PT_WORDS]
+-    if pt_hits:
+-        return "", "palavras em português: " + ", ".join(pt_hits)
++        return None, f"'{pt}' não aparece no texto da cena"
++    for label, value, low, high, allowed in (
++        ("QUERY", query, 5, 10, r"[^A-Za-z ]"),
++        ("PROMPT", prompt, 25, 60, r"[^A-Za-z ,.;:\-]"),
++    ):
++        if re.search(r"[^\x00-\x7F]", value):
++            return None, f"{label} tem acento: não está em inglês"
++        if re.search(r"\d", value) or re.search(allowed, value):
++            return None, f"{label} tem número ou símbolo não permitido"
++        words = [w.lower().strip(",.;:-") for w in value.split()]
++        if not low <= len(words) <= high:
++            return None, f"{label} com {len(words)} palavras (use de {low} a {high})"
++        if any(w in QWEN_PT_WORDS for w in words):
++            return None, f"{label} tem palavras em português"
++    if any(w in QWEN_NUMBER_WORDS for w in query.lower().split()):
++        return None, "QUERY tem número por extenso"
+     text_norm = _norm_text(scene_text)
+-    if any(h in " ".join(words) for h in QWEN_HISTORY_WORDS) and not any(h in text_norm for h in QWEN_HISTORY_WORDS):
+-        return "", "história que o texto da cena não menciona"
+-    return " ".join(words), ""
+-
+-
+-def generate_visual_query_with_qwen(scene_text: str, topic: str = "") -> str:
+-    """Converte a cena numa query visual curta, em inglês, para busca de imagem.
+-
+-    Usa o modelo local via Ollama (API HTTP, temperatura 0). Valida a resposta e
+-    pede uma segunda vez informando o motivo da rejeição. Sem resposta válida,
+-    retorna "" e o fallback por tema assume.
+-    """
++    combined = (query + " " + prompt).lower()
++    if any(h in combined for h in QWEN_HISTORY_WORDS) and not any(h in text_norm for h in QWEN_HISTORY_WORDS):
++        return None, "história que o texto da cena não menciona"
++    return {"query": query.lower(), "prompt": prompt}, ""
++
++
++def generate_visual_prompt_with_qwen(scene_text: str, topic: str = "") -> tuple:
++    """Retorna (query_de_busca, prompt_de_geracao) para a cena. ("", "") se não houver resposta válida."""
+     scene_text = (scene_text or "").strip()
+     if not scene_text:
+-        return ""
++        return "", ""
+ 
+     cache = _load_qwen_cache()
+     cache_key = hashlib.md5(
+         f"{QWEN_PROMPT_VERSION}|{QWEN_MODEL}|{topic}|{scene_text}".encode("utf-8")
+     ).hexdigest()
+-    if cache_key in cache:
+-        return cache[cache_key]
++    if cache_key in cache and isinstance(cache[cache_key], dict):
++        return cache[cache_key]["query"], cache[cache_key]["prompt"]
+ 
+     system = _qwen_system_prompt(topic)
+     reason = ""
+     for _ in range(2):
+         user = f"Sentence: {scene_text}"
+         if reason:
+-            user += f"\nYour previous query was rejected ({reason}). Write a better one, following all rules."
++            user += f"\nYour previous answer was rejected ({reason}). Answer again, following all rules."
+         try:
+             raw = _ollama_chat(system, user)
+         except Exception as exc:
+             print(f"[QWEN ERRO] {exc}", flush=True)
+-            return ""
+-        query, reason = _validate_qwen_query(raw, scene_text)
+-        if query:
+-            cache[cache_key] = query
++            return "", ""
++        result, reason = _validate_qwen_answer(raw, scene_text)
++        if result is None and reason == "cena sem assunto visual":
++            break
++        if result:
++            cache[cache_key] = result
+             _save_qwen_cache(cache)
+-            print(f"[QWEN QUERY] {query}", flush=True)
+-            return query
++            print(f"[QWEN QUERY] {result['query']}", flush=True)
++            print(f"[QWEN PROMPT] {result['prompt'][:160]}", flush=True)
++            return result["query"], result["prompt"]
+ 
+     print(f"[QWEN REJEITADA] {reason} | texto={scene_text[:80]}", flush=True)
+-    return ""
++    return "", ""
++
++
++def generate_visual_query_with_qwen(scene_text: str, topic: str = "") -> str:
++    """Compatibilidade: devolve só a query de busca."""
++    return generate_visual_prompt_with_qwen(scene_text, topic)[0]
+ 
+ 
+ def extract_historical_person(scene_text: str):
+@@ -1578,7 +1580,7 @@
+             False
+         )
+ 
+-    qwen_query = generate_visual_query_with_qwen(scene_text, topic=topic)
++    qwen_query, qwen_prompt = generate_visual_prompt_with_qwen(scene_text, topic=topic)
+ 
+     if qwen_query:
+ 
+@@ -1586,7 +1588,7 @@
+             "image",
+             qwen_query,
+             "",
+-            qwen_query,
++            qwen_prompt or qwen_query,
+             False
+         )
+ 

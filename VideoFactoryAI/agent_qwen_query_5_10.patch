@@ -1,0 +1,54 @@
+--- a/agent.py
++++ b/agent.py
+@@ -248,12 +248,12 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-QWEN_PROMPT_VERSION = "v3"
++QWEN_PROMPT_VERSION = "v4"
+ QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5-coder:3b")
+ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+ QWEN_PT_WORDS = frozenset({
+-    "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas", "com", "para", "por",
+-    "uma", "um", "os", "as", "o", "a", "e", "que", "sobre", "entre", "ao", "aos", "pelo",
++    "de", "do", "da", "dos", "das", "em", "na", "nos", "nas", "com", "para", "por",
++    "uma", "um", "os", "que", "entre", "aos", "pelo",
+ })
+ QWEN_HISTORY_WORDS = ("histor", "invent", "discover", "famous", "inventor")
+ QWEN_NUMBER_WORDS = frozenset({
+@@ -277,13 +277,14 @@
+         "TASK, in two steps:",
+         "1. PT: copy from the sentence the main concrete object, material or tool it talks about.",
+         "   Copy it EXACTLY as written in the sentence, 2 to 4 words.",
+-        "2. EN: translate that copied phrase into English, 2 to 5 words, lowercase.",
++        "2. EN: write an English image search query of 5 to 10 words that describes the scene with that object, its action and its place, lowercase.",
+         "",
+         "Answer with exactly these two lines and nothing else:",
+         "PT: <phrase copied from the sentence>",
+         "EN: <english query>",
+         "",
+         "RULES:",
++        "- The EN query must have 5 to 10 words. Never answer with a single word.",
+         "- Never invent an object the sentence does not mention.",
+         "- No digits, no punctuation, no people, no history, no famous inventors unless the sentence names them.",
+         "- If the sentence is only a call to action (like, subscribe, thanks, sign-off), answer exactly: NONE",
+@@ -297,7 +298,7 @@
+         "stream": False,
+         "keep_alive": "30m",
+         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+-        "options": {"temperature": 0, "num_predict": 24},
++        "options": {"temperature": 0, "num_predict": 48},
+     }
+     request = urllib.request.Request(
+         OLLAMA_URL.rstrip("/") + "/api/chat",
+@@ -340,8 +341,8 @@
+     if re.search(r"\d", en) or re.search(r"[^A-Za-z ]", en):
+         return "", "a query tem número ou pontuação"
+     words = en.lower().split()
+-    if not 2 <= len(words) <= 5:
+-        return "", f"{len(words)} palavras (use de 2 a 5)"
++    if not 5 <= len(words) <= 10:
++        return "", f"{len(words)} palavras (use de 5 a 10)"
+     if any(w in QWEN_NUMBER_WORDS for w in words):
+         return "", "número por extenso na query"
+     pt_hits = [w for w in words if w in QWEN_PT_WORDS]

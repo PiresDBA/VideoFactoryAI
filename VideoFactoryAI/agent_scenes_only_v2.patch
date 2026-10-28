@@ -1,0 +1,73 @@
+--- a/agent.py
++++ b/agent.py
+@@ -2743,6 +2743,8 @@
+     # Pipeline control - permite executar apenas partes do pipeline
+     p.add_argument("--script-only", action="store_true", default=False,
+                    help="Apenas gerar/planejar o roteiro (passo 1), sem TTS/mídia/render")
++    p.add_argument("--scenes-only", action="store_true", default=False,
++                   help="Gera só o plano de cenas (ckpts/scenes_planned.json) a partir do roteiro e para.")
+     p.add_argument("--images-only", action="store_true", default=False,
+                    help="Apenas buscar/gerar mídias (passo 4), precisa de roteiro e áudio existentes")
+     p.add_argument("--render-only", action="store_true", default=False,
+@@ -2771,12 +2773,12 @@
+         p.error("--youtube-authorized-file exige --youtube-rights-confirmed.")
+ 
+     # Validação de controle de pipeline
+-    pipeline_modes = [args.script_only, args.images_only, args.render_only]
++    pipeline_modes = [args.script_only, args.scenes_only, args.images_only, args.render_only]
+     if sum(pipeline_modes) > 1:
+         p.error("--script-only, --images-only e --render-only são mutuamente exclusivos.")
+ 
+     # --images-only e --render-only exigem roteiro existente
+-    if (args.images_only or args.render_only) and not args.roteiro:
++    if (args.images_only or args.render_only or args.scenes_only) and not args.roteiro:
+         p.error("--images-only e --render-only exigem um arquivo de roteiro (--roteiro / caminho do .txt).")
+     # --render-only precisa de mídia pré-existente
+     if args.render_only and not args.subtitles_only:
+@@ -3243,12 +3245,15 @@
+     # -------------------------------------------------------------------------
+     # TRATAMENTO DE RETOMADA OU LIMPEZA DE PRODUÇÃO NOVA
+     # -------------------------------------------------------------------------
++    scenes_only = getattr(args, "scenes_only", False)
+     state = {}
+-    if resume_mode and not args.no_checkpoint:
++    if (resume_mode or scenes_only) and not args.no_checkpoint:
+         state = load_checkpoint(checkpoint)
+-        if state:
++        if scenes_only:
++            state.pop("scenes", None)  # cenas novas: não reaproveita o plano antigo do checkpoint
++        if state and resume_mode:
+             log("Retomando execução a partir do checkpoint salvo...")
+-    else:
++    elif not scenes_only:
+         # Se for uma nova execução (sem --resume), limpa os temporários da produção
+         # anterior deste projeto específico
+         for f in [
+@@ -3283,6 +3288,10 @@
+     if state.get("scenes"):
+         scenes = state["scenes"]
+         log(f"  Cenas carregadas do checkpoint: {len(scenes)} cenas")
++    elif (images_only or render_only) and plan_path.exists():
++        # Mídias e render usam o JSON de cenas que você revisou (não replaneja).
++        scenes = json.loads(plan_path.read_text(encoding="utf-8"))
++        log(f"  Cenas carregadas de {plan_path.name}: {len(scenes)} cenas")
+     else:
+         # Verifica se o Gem já definiu as cenas (modo VF_MODO_ESCRITA=gem)
+         gem_extras_path = ROOT_DIR / "roteiros" / f"{slug_topic}_gem_extras.json"
+@@ -3347,8 +3356,16 @@
+             f"({sum(1 for s in scenes if s['tipo']=='video')} vídeo | "
+             f"{sum(1 for s in scenes if s['tipo']=='image')} imagem)")
+         plan_path.parent.mkdir(parents=True, exist_ok=True)
++        # Plano antigo vira *_old.json (não é apagado); o novo passa a ser o oficial.
++        if plan_path.exists():
++            plan_path.replace(plan_path.with_name("scenes_planned_old.json"))
++        plan_path.parent.mkdir(parents=True, exist_ok=True)
+         with open(plan_path, "w", encoding="utf-8") as f:
+             json.dump(scenes, f, ensure_ascii=False, indent=2)
++        if scenes_only:
++            print(f"\n[OK] Cenas salvas em: {plan_path}")
++            print(f"[OK] {len(scenes)} cenas. Revise o JSON se quiser e rode as mídias com --images-only.")
++            return
+         if not args.no_checkpoint:
+             state["scenes"] = scenes
+             save_checkpoint(state, checkpoint)

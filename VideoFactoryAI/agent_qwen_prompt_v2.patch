@@ -1,0 +1,213 @@
+--- a/agent.py
++++ b/agent.py
+@@ -248,95 +248,128 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-def generate_visual_query_with_qwen(scene_text: str) -> str:
++QWEN_PROMPT_VERSION = "v2"
++QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5-coder:3b")
++OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
++QWEN_EXAMPLES = [
++    ("Lixamos o topo da cortiça com lixa grão 120 para deixar a superfície plana.",
++     "sanding cork sheet with sandpaper"),
++    ("A cola de lastro é feita com partes iguais de cola branca e água destilada.",
++     "white glue and water mixture"),
++    ("Se você gostou, deixe seu like e inscreva-se no canal.",
++     "NONE"),
++]
++QWEN_PT_WORDS = frozenset({
++    "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas", "com", "para", "por",
++    "uma", "um", "os", "as", "o", "a", "e", "que", "sobre", "entre", "ao", "aos", "pelo",
++})
++QWEN_HISTORY_WORDS = ("histor", "invent", "discover", "famous", "inventor")
++
++
++def _qwen_system_prompt(topic: str) -> str:
++    subject = topic.strip() or "the video topic"
++    lines = [
++        f"You write image search queries for a documentary about: {subject}.",
++        "Given one narration sentence, write the search query for the photo that should appear on screen while it is narrated.",
++        "",
++        "RULES:",
++        "- Describe what the viewer SEES: a concrete object, material, tool, place or action named or clearly implied by the sentence.",
++        "- Keep the specific object names from the sentence, translated to English.",
++        "- 2 to 5 English words. Output only the query: lowercase, no punctuation, no quotes, no explanation.",
++        "- Do NOT add people, history, or famous inventors unless the sentence names them.",
++        "- If the sentence is only a call to action (like, subscribe, thanks, sign-off), output exactly: NONE",
++        "",
++        "EXAMPLES:",
++    ]
++    for sentence, query in QWEN_EXAMPLES:
++        lines.append(f"Sentence: {sentence}")
++        lines.append(f"Query: {query}")
++    return "\n".join(lines)
++
++
++def _ollama_chat(system: str, user: str) -> str:
++    import urllib.request
++    body = {
++        "model": QWEN_MODEL,
++        "stream": False,
++        "keep_alive": "30m",
++        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
++        "options": {"temperature": 0, "num_predict": 24},
++    }
++    request = urllib.request.Request(
++        OLLAMA_URL.rstrip("/") + "/api/chat",
++        data=json.dumps(body).encode("utf-8"),
++        headers={"Content-Type": "application/json"},
++        method="POST",
++    )
++    with urllib.request.urlopen(request, timeout=60) as response:
++        data = json.loads(response.read().decode("utf-8"))
++    return str((data.get("message") or {}).get("content", ""))
++
++
++def _validate_qwen_query(raw: str, scene_text: str) -> tuple:
++    """Retorna (query_limpa, motivo_da_rejeicao). query_limpa vazia = rejeitada."""
++    line = next((item.strip() for item in str(raw or "").splitlines() if item.strip()), "")
++    line = line.strip("\"'`").strip()
++    if not line:
++        return "", "resposta vazia"
++    if line.upper() == "NONE":
++        return "", "cena sem assunto visual"
++    if re.search(r"[^\x00-\x7F]", line):
++        return "", "contém acento: não está em inglês"
++    cleaned = re.sub(r"[^A-Za-z\- ]", " ", line).lower()
++    words = cleaned.split()
++    if not 2 <= len(words) <= 5:
++        return "", f"{len(words)} palavras (use de 2 a 5)"
++    pt = [w for w in words if w in QWEN_PT_WORDS]
++    if pt:
++        return "", "palavras em português: " + ", ".join(pt)
++    text_lower = scene_text.lower()
++    if any(h in cleaned for h in QWEN_HISTORY_WORDS) and not any(h in text_lower for h in QWEN_HISTORY_WORDS):
++        return "", "história que o texto da cena não menciona"
++    return " ".join(words), ""
++
++
++def generate_visual_query_with_qwen(scene_text: str, topic: str = "") -> str:
++    """Converte a cena numa query visual curta, em inglês, para busca de imagem.
++
++    Usa o modelo local via Ollama (API HTTP, temperatura 0). Valida a resposta e
++    pede uma segunda vez informando o motivo da rejeição. Sem resposta válida,
++    retorna "" e o fallback por tema assume.
+     """
+-    Converte uma cena em uma query visual curta.
+-    Usa Qwen 2.5 3B local via Ollama.
+-    """
+-
++    scene_text = (scene_text or "").strip()
+     if not scene_text:
+         return ""
+ 
+     cache = _load_qwen_cache()
+-
+     cache_key = hashlib.md5(
+-        scene_text.strip().encode("utf-8")
++        f"{QWEN_PROMPT_VERSION}|{QWEN_MODEL}|{topic}|{scene_text}".encode("utf-8")
+     ).hexdigest()
+-
+     if cache_key in cache:
+         return cache[cache_key]
+ 
+-    prompt = f"""
+-You are an expert documentary visual researcher.
+-
+-Convert the narration into a SHORT image search query.
+-
+-RULES:
+-- English
+-- Maximum 8 words
+-- Focus on visual subject
+-- Historical figures should be prioritized
+-- Historical inventions should be prioritized
+-- No explanation
+-- No quotes
+-- Return only the query
+-
+-Narration:
+-
+-{scene_text}
+-"""
+-
+-    try:
+-
+-        result = subprocess.run(
+-            [
+-                "ollama",
+-                "run",
+-                "qwen2.5-coder:3b"
+-            ],
+-            input=prompt.encode("utf-8"),
+-            capture_output=True,
+-            timeout=60
+-        )
+-        output = result.stdout.decode(
+-            "utf-8",
+-            errors="replace"
+-        ).strip()
+-        query = output
+-        query = query.split("\n")[0]
+-
+-        query = query.replace(",", " ")
+-
+-        query = " ".join(query.split())
+-
+-        words = query.split()
+-
+-        query = " ".join(words[:6])
+-        query = query.replace('"', "")
+-        query = query.replace("'", "")
+-        query = query.replace("\n", " ")
+-
++    system = _qwen_system_prompt(topic)
++    reason = ""
++    for _ in range(2):
++        user = f"Sentence: {scene_text}"
++        if reason:
++            user += f"\nYour previous query was rejected ({reason}). Write a better one, following all rules."
++        try:
++            raw = _ollama_chat(system, user)
++        except Exception as exc:
++            print(f"[QWEN ERRO] {exc}", flush=True)
++            return ""
++        query, reason = _validate_qwen_query(raw, scene_text)
+         if query:
+-
+             cache[cache_key] = query
+-
+             _save_qwen_cache(cache)
+-
+-            print(
+-                f"[QWEN QUERY] {query}",
+-                flush=True
+-            )
+-
++            print(f"[QWEN QUERY] {query}", flush=True)
+             return query
+ 
+-    except Exception as e:
+-
+-        print(
+-            f"[QWEN ERRO] {e}",
+-            flush=True
+-        )
+-
++    print(f"[QWEN REJEITADA] {reason} | texto={scene_text[:80]}", flush=True)
+     return ""
++
++
+ def extract_historical_person(scene_text: str):
+ 
+     import re
+@@ -1521,7 +1554,7 @@
+             False
+         )
+ 
+-    qwen_query = generate_visual_query_with_qwen(scene_text)
++    qwen_query = generate_visual_query_with_qwen(scene_text, topic=topic)
+ 
+     if qwen_query:
+ 

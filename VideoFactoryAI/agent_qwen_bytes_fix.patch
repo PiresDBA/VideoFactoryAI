@@ -1,0 +1,11 @@
+--- a/agent.py
++++ b/agent.py
+@@ -302,7 +302,7 @@
+             "utf-8",
+             errors="replace"
+         ).strip()
+-        query = result.stdout.strip()
++        query = output
+         query = query.split("\n")[0]
+ 
+         query = query.replace(",", " ")

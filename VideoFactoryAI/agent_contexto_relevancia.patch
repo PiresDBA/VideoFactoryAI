@@ -1,0 +1,68 @@
+--- a/agent.py
++++ b/agent.py
+@@ -248,7 +248,7 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-OLLAMA_PROMPT_VERSION = "v10"
++OLLAMA_PROMPT_VERSION = "v11"
+ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL") or os.getenv("QWEN_MODEL") or "gemma4-turbo-perfeito"
+ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+ OLLAMA_PT_WORDS = frozenset({
+@@ -269,10 +269,35 @@
+     return re.sub(r"\s+", " ", text).strip().lower()
+ 
+ 
++_VISUAL_CONTEXT_CACHE = None
++
++
++def _load_visual_context() -> dict:
++    """Assunto do vídeo e termos do domínio, lidos de visual_context.json (editável)."""
++    global _VISUAL_CONTEXT_CACHE
++    if _VISUAL_CONTEXT_CACHE is not None:
++        return _VISUAL_CONTEXT_CACHE
++    path = Path(os.getenv("VISUAL_CONTEXT_FILE") or Path(__file__).resolve().parent / "visual_context.json")
++    context = {"subject": "", "domain_terms": [], "require_domain_term": False}
++    if path.is_file():
++        try:
++            data = json.loads(path.read_text(encoding="utf-8"))
++            context["subject"] = str(data.get("subject", "")).strip()
++            context["domain_terms"] = [str(t).strip().lower() for t in data.get("domain_terms", []) if str(t).strip()]
++            context["require_domain_term"] = bool(data.get("require_domain_term", False))
++        except Exception as exc:
++            print(f"[OLLAMA AVISO] visual_context.json inválido: {exc}", flush=True)
++    else:
++        print(f"[OLLAMA AVISO] {path.name} não encontrado: a query não será checada pelo tema.", flush=True)
++    _VISUAL_CONTEXT_CACHE = context
++    return context
++
++
+ def _ollama_system_prompt(topic: str) -> str:
+     subject = topic.strip() or "the video topic"
+     return "\n".join([
+-        f"You write image search queries for one scene of a documentary about: {subject}.",
++        f"You write image search queries for one scene of a documentary about: {_load_visual_context()['subject'] or subject}.",
++        "Every QUERY must be about that subject: show the real objects, materials and places of that subject, never an unrelated object.",
+         "",
+         "Answer with exactly these two lines and nothing else:",
+         "PT: <2 to 4 words copied from the sentence: its main object, material or tool>",
+@@ -364,6 +389,10 @@
+         return None, "QUERY tem palavras em português"
+     if any(w in OLLAMA_NUMBER_WORDS for w in words):
+         return None, "QUERY tem número por extenso"
++    context = _load_visual_context()
++    if context["require_domain_term"] and context["domain_terms"]:
++        if not any(term in query for term in context["domain_terms"]):
++            return None, "QUERY fora do tema do vídeo: use objetos, materiais ou lugares do assunto"
+     combined = query
+     if any(h in combined for h in OLLAMA_HISTORY_WORDS) and not any(h in text_norm for h in OLLAMA_HISTORY_WORDS):
+         return None, "história que o texto da cena não menciona"
+@@ -380,7 +409,7 @@
+ 
+     cache = _load_ollama_cache()
+     cache_key = hashlib.md5(
+-        f"{OLLAMA_PROMPT_VERSION}|{OLLAMA_MODEL}|{topic}|{scene_text}".encode("utf-8")
++        f"{OLLAMA_PROMPT_VERSION}|{OLLAMA_MODEL}|{topic}|{_load_visual_context()['subject']}|{scene_text}".encode("utf-8")
+     ).hexdigest()
+     if cache_key in cache and isinstance(cache[cache_key], dict):
+         return cache[cache_key]["query"], cache[cache_key]["prompt"]

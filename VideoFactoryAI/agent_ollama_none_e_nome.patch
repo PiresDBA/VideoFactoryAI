@@ -1,0 +1,211 @@
+--- a/agent.py
++++ b/agent.py
+@@ -107,21 +107,21 @@
+ # não estiver instalada, o sistema não falha na inicialização do script ou no --help.
+ 
+ #agente usando ollama para criar busca de iamgem com texto sugestivo / adequado
+-QWEN_CACHE_FILE = Path("qwen_visual_queries.json")
+-
+-
+-def _load_qwen_cache():
+-    if QWEN_CACHE_FILE.exists():
++OLLAMA_CACHE_FILE = Path("ollama_visual_queries.json")
++
++
++def _load_ollama_cache():
++    if OLLAMA_CACHE_FILE.exists():
+         try:
+-            return json.loads(QWEN_CACHE_FILE.read_text(encoding="utf-8"))
++            return json.loads(OLLAMA_CACHE_FILE.read_text(encoding="utf-8"))
+         except:
+             return {}
+     return {}
+ 
+ 
+-def _save_qwen_cache(cache):
++def _save_ollama_cache(cache):
+     try:
+-        QWEN_CACHE_FILE.write_text(
++        OLLAMA_CACHE_FILE.write_text(
+             json.dumps(cache, ensure_ascii=False, indent=2),
+             encoding="utf-8"
+         )
+@@ -248,18 +248,18 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-QWEN_PROMPT_VERSION = "v9"
+-QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5-coder:3b")
++OLLAMA_PROMPT_VERSION = "v10"
++OLLAMA_MODEL = os.getenv("OLLAMA_MODEL") or os.getenv("QWEN_MODEL") or "gemma4-turbo-perfeito"
+ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+-QWEN_PT_WORDS = frozenset({
++OLLAMA_PT_WORDS = frozenset({
+     "de", "do", "da", "dos", "das", "em", "na", "nos", "nas", "com", "para", "por",
+     "uma", "um", "os", "que", "entre", "aos", "pelo",
+ })
+-QWEN_NUMBER_WORDS = frozenset({
++OLLAMA_NUMBER_WORDS = frozenset({
+     "zero", "um", "uma", "dois", "duas", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez",
+     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+ })
+-QWEN_HISTORY_WORDS = ("histor", "invent", "discover", "famous", "inventor")
++OLLAMA_HISTORY_WORDS = ("histor", "invent", "discover", "famous", "inventor")
+ 
+ 
+ def _norm_text(text: str) -> str:
+@@ -269,7 +269,7 @@
+     return re.sub(r"\s+", " ", text).strip().lower()
+ 
+ 
+-def _qwen_system_prompt(topic: str) -> str:
++def _ollama_system_prompt(topic: str) -> str:
+     subject = topic.strip() or "the video topic"
+     return "\n".join([
+         f"You write image search queries for one scene of a documentary about: {subject}.",
+@@ -289,7 +289,7 @@
+ def _ollama_chat(system: str, user: str) -> str:
+     import urllib.request
+     body = {
+-        "model": QWEN_MODEL,
++        "model": OLLAMA_MODEL,
+         "stream": False,
+         "think": False,
+         "keep_alive": "30m",
+@@ -309,10 +309,10 @@
+     if not content.strip():
+         # Modelos com raciocínio podem colocar a resposta em "thinking" quando o corte de tokens acontece antes.
+         content = str(message.get("thinking", "") or "")
+-        print(f"[QWEN AVISO] resposta vazia (done_reason={data.get('done_reason')}); usando o campo de raciocínio", flush=True)
++        print(f"[OLLAMA AVISO] resposta vazia (done_reason={data.get('done_reason')}); usando o campo de raciocínio", flush=True)
+     return content
+ 
+-def _parse_qwen_answer(raw: str) -> dict:
++def _parse_ollama_answer(raw: str) -> dict:
+     """Extrai PT/QUERY da resposta, tolerando markdown, listas, bloco <think> e JSON."""
+     text = str(raw or "")
+     text = re.sub(r"(?is)<think>.*?</think>", " ", text).strip()
+@@ -332,20 +332,22 @@
+     out = {}
+     for i in range(1, len(parts) - 1, 2):
+         out[parts[i].upper()] = " ".join(parts[i + 1].split()).strip().strip("\"'`").strip()
++    if any(str(out.get(k, "")).strip(" *_.").upper() == "NONE" for k in ("PT", "QUERY")):
++        return {"status": "NONE"}
+     return out
+ 
+ 
+ 
+-def _validate_qwen_answer(raw: str, scene_text: str) -> tuple:
++def _validate_ollama_answer(raw: str, scene_text: str) -> tuple:
+     """Retorna (resultado, motivo). resultado é None quando rejeitada."""
+-    data = _parse_qwen_answer(raw)
++    data = _parse_ollama_answer(raw)
+     if data.get("status") == "NONE":
+         return None, "cena sem assunto visual"
+     pt, query = data.get("PT", ""), data.get("QUERY", "")
+     if not (pt and query):
+         return None, "formato inválido (use as linhas PT: e QUERY:)"
+     text_norm = _norm_text(scene_text)
+-    pt_content = [w for w in _norm_text(pt).split() if len(w) >= 4 and w not in QWEN_PT_WORDS]
++    pt_content = [w for w in _norm_text(pt).split() if len(w) >= 4 and w not in OLLAMA_PT_WORDS]
+     if not any(w in text_norm for w in pt_content):
+         return None, f"'{pt}' não tem palavra que apareça no texto da cena"
+     query = re.sub(r"[,.;:!?\"'`]", " ", query)
+@@ -358,32 +360,32 @@
+     words = query.split()
+     if not 5 <= len(words) <= 10:
+         return None, f"QUERY com {len(words)} palavras (use de 5 a 10)"
+-    if any(w in QWEN_PT_WORDS for w in words):
++    if any(w in OLLAMA_PT_WORDS for w in words):
+         return None, "QUERY tem palavras em português"
+-    if any(w in QWEN_NUMBER_WORDS for w in words):
++    if any(w in OLLAMA_NUMBER_WORDS for w in words):
+         return None, "QUERY tem número por extenso"
+     combined = query
+-    if any(h in combined for h in QWEN_HISTORY_WORDS) and not any(h in text_norm for h in QWEN_HISTORY_WORDS):
++    if any(h in combined for h in OLLAMA_HISTORY_WORDS) and not any(h in text_norm for h in OLLAMA_HISTORY_WORDS):
+         return None, "história que o texto da cena não menciona"
+     prompt = (f"Photograph of {query}, documentary style, realistic, natural lighting, "
+               f"sharp focus, medium shot, no text or logos in the image.")
+     return {"query": query, "prompt": prompt}, ""
+ 
+ 
+-def generate_visual_prompt_with_qwen(scene_text: str, topic: str = "") -> tuple:
++def generate_visual_prompt_with_ollama(scene_text: str, topic: str = "") -> tuple:
+     """Retorna (query_de_busca, prompt_de_geracao) para a cena. ("", "") se não houver resposta válida."""
+     scene_text = (scene_text or "").strip()
+     if not scene_text:
+         return "", ""
+ 
+-    cache = _load_qwen_cache()
++    cache = _load_ollama_cache()
+     cache_key = hashlib.md5(
+-        f"{QWEN_PROMPT_VERSION}|{QWEN_MODEL}|{topic}|{scene_text}".encode("utf-8")
++        f"{OLLAMA_PROMPT_VERSION}|{OLLAMA_MODEL}|{topic}|{scene_text}".encode("utf-8")
+     ).hexdigest()
+     if cache_key in cache and isinstance(cache[cache_key], dict):
+         return cache[cache_key]["query"], cache[cache_key]["prompt"]
+ 
+-    system = _qwen_system_prompt(topic)
++    system = _ollama_system_prompt(topic)
+     reason = ""
+     for _ in range(2):
+         user = f"Sentence: {scene_text}"
+@@ -392,27 +394,27 @@
+         try:
+             raw = _ollama_chat(system, user)
+         except Exception as exc:
+-            print(f"[QWEN ERRO] {exc}", flush=True)
++            print(f"[OLLAMA ERRO] {exc}", flush=True)
+             return "", ""
+-        result, reason = _validate_qwen_answer(raw, scene_text)
++        result, reason = _validate_ollama_answer(raw, scene_text)
+         if result is None and reason.startswith("formato"):
+-            print(f"[QWEN RESPOSTA BRUTA] {str(raw)[:240]!r}", flush=True)
++            print(f"[OLLAMA RESPOSTA BRUTA] {str(raw)[:240]!r}", flush=True)
+         if result is None and reason == "cena sem assunto visual":
+             break
+         if result:
+             cache[cache_key] = result
+-            _save_qwen_cache(cache)
+-            print(f"[QWEN QUERY] {result['query']}", flush=True)
+-            print(f"[QWEN PROMPT] {result['prompt'][:160]}", flush=True)
++            _save_ollama_cache(cache)
++            print(f"[OLLAMA QUERY] {result['query']}", flush=True)
++            print(f"[OLLAMA PROMPT] {result['prompt'][:160]}", flush=True)
+             return result["query"], result["prompt"]
+ 
+-    print(f"[QWEN REJEITADA] {reason} | texto={scene_text[:80]}", flush=True)
++    print(f"[OLLAMA REJEITADA] {reason} | texto={scene_text[:80]}", flush=True)
+     return "", ""
+ 
+ 
+-def generate_visual_query_with_qwen(scene_text: str, topic: str = "") -> str:
++def generate_visual_query_with_ollama(scene_text: str, topic: str = "") -> str:
+     """Compatibilidade: devolve só a query de busca."""
+-    return generate_visual_prompt_with_qwen(scene_text, topic)[0]
++    return generate_visual_prompt_with_ollama(scene_text, topic)[0]
+ 
+ 
+ def extract_historical_person(scene_text: str):
+@@ -1599,15 +1601,15 @@
+             False
+         )
+ 
+-    qwen_query, qwen_prompt = generate_visual_prompt_with_qwen(scene_text, topic=topic)
+-
+-    if qwen_query:
++    ollama_query, ollama_prompt = generate_visual_prompt_with_ollama(scene_text, topic=topic)
++
++    if ollama_query:
+ 
+         return (
+             "image",
+-            qwen_query,
++            ollama_query,
+             "",
+-            qwen_prompt or qwen_query,
++            ollama_prompt or ollama_query,
+             False
+         )
+ 

@@ -1,0 +1,38 @@
+--- a/agent.py
++++ b/agent.py
+@@ -248,7 +248,7 @@
+     )
+ ffmpeg_path = str(_ffmpeg_found)
+ 
+-QWEN_PROMPT_VERSION = "v8"
++QWEN_PROMPT_VERSION = "v9"
+ QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen2.5-coder:3b")
+ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+ QWEN_PT_WORDS = frozenset({
+@@ -291,6 +291,7 @@
+     body = {
+         "model": QWEN_MODEL,
+         "stream": False,
++        "think": False,
+         "keep_alive": "30m",
+         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+         "options": {"temperature": 0, "num_predict": 160},
+@@ -301,10 +302,15 @@
+         headers={"Content-Type": "application/json"},
+         method="POST",
+     )
+-    with urllib.request.urlopen(request, timeout=90) as response:
++    with urllib.request.urlopen(request, timeout=180) as response:
+         data = json.loads(response.read().decode("utf-8"))
+-    return str((data.get("message") or {}).get("content", ""))
+-
++    message = data.get("message") or {}
++    content = str(message.get("content", "") or "")
++    if not content.strip():
++        # Modelos com raciocínio podem colocar a resposta em "thinking" quando o corte de tokens acontece antes.
++        content = str(message.get("thinking", "") or "")
++        print(f"[QWEN AVISO] resposta vazia (done_reason={data.get('done_reason')}); usando o campo de raciocínio", flush=True)
++    return content
+ 
+ def _parse_qwen_answer(raw: str) -> dict:
+     """Extrai PT/QUERY da resposta, tolerando markdown, listas, bloco <think> e JSON."""
