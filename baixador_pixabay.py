@@ -1,7 +1,11 @@
 ﻿import os
 import requests
 
-API_KEY = "REDACTED_PIXABAY_API_KEY"
+API_KEY = os.environ.get("PIXABAY_API_KEY", "")
+if not API_KEY:
+    raise SystemExit(
+        "Defina PIXABAY_API_KEY no ambiente antes de executar este script."
+    )
 base_dir = r"C:\Projeto_Ira_EUA"
 videos_dir = os.path.join(base_dir, "videos")
 os.makedirs(videos_dir, exist_ok=True)

@@ -1,7 +1,8 @@
+import os
 import requests
 import json
 
-PIXABAY_KEY = "REDACTED_PIXABAY_API_KEY"
+PIXABAY_KEY = os.environ.get("PIXABAY_API_KEY", "")
 
 def get_pixabay_video(query):
     url = "https://pixabay.com/api/videos/"

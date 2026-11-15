@@ -10,7 +10,7 @@ from pathlib import Path
 import requests
 from typing import List, Dict, Any
 
-API_KEY = "REDACTED_PIXABAY_API_KEY"
+API_KEY = os.environ.get("PIXABAY_API_KEY", "")
 
 GENERIC_FALLBACK_QUERIES = {
     "video": ["politics diplomacy", "middle east desert", "geopolitics map", "city traffic crowd"],
@@ -74,6 +74,10 @@ def get_media_info(media_path: str) -> Dict[str, Any]:
 
 def query_pixabay(query: str, is_video: bool, api_key: str = API_KEY) -> str:
     """Query Pixabay API for video or image and return the download URL or None."""
+    if not api_key:
+        raise RuntimeError(
+            "PIXABAY_API_KEY não está definida. Defina a variável de ambiente antes de executar."
+        )
     endpoint = "https://pixabay.com/api/videos/" if is_video else "https://pixabay.com/api/"
     params = {
         "key": api_key,

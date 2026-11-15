@@ -21,7 +21,7 @@ import requests
 from typing import Dict, Any, List
 
 BASE_DIR = r"C:\Projeto_Ira_EUA"
-PIXABAY_KEY = "REDACTED_PIXABAY_API_KEY"
+PIXABAY_KEY = os.environ.get("PIXABAY_API_KEY", "")
 
 VIDEOS_DIR = os.path.join(BASE_DIR, "videos")
 IMAGENS_DIR = os.path.join(BASE_DIR, "imagens")

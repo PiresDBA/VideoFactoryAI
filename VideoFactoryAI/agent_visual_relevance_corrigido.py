@@ -259,7 +259,7 @@ def get_config(config_path: Path, overrides: dict) -> dict:
             "max_duration_s": 25.0
         },
         "media": {
-            "pixabay_api_key": "REDACTED_PIXABAY_API_KEY",
+            "pixabay_api_key": os.environ.get("PIXABAY_API_KEY", ""),
             "ai_image_provider": "pollinations"
         },
         "video": {
@@ -1958,7 +1958,7 @@ def source_media(scenes: List[Dict], cfg: dict, root: Path) -> Dict[int, str]:
     """
     videos_dir  = str(root / "videos")
     imagens_dir = str(root / "imagens")
-    api_key     = cfg["media"]["pixabay_api_key"]
+    api_key     = cfg["media"]["pixabay_api_key"] or os.getenv("PIXABAY_API_KEY", "")
 
     scenes_for_module = []
     for s in scenes:

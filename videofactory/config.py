@@ -67,7 +67,7 @@ class VideoFactoryConfig:
     
     # Media APIs
     pixabay_api_key: str = field(
-        default_factory=lambda: os.getenv("PIXABAY_API_KEY", "REDACTED_PIXABAY_API_KEY")
+        default_factory=lambda: os.getenv("PIXABAY_API_KEY")
     )
     openai_api_key: Optional[str] = field(
         default_factory=lambda: os.getenv("OPENAI_API_KEY")
